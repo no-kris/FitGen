@@ -8,6 +8,7 @@
   --border-color: #262626;
   --border-highlight: #f59e0b;
   --text-main: #e5e5e5;
+  --text-dark: #292929;
   --text-muted: #737373;
   --primary: #f59e0b;
   --primary-rgb: 245, 158, 11;
@@ -19,6 +20,11 @@
   --nav-height: 65px;
   --font-family-main: "Courier New", Courier, monospace;
   --font-family-secondary: "Poppins", sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+  font-size: 62.5%;
 }
 
 /* 
@@ -58,6 +64,14 @@
 
 .text-2xl {
   font-size: 2rem;
+}
+
+.text-3xl {
+  font-size: 3rem;
+}
+
+.text-4xl {
+  font-size: 4rem;
 }
 
 .uppercase {
@@ -124,6 +138,10 @@
   margin-bottom: 2.4rem;
 }
 
+.mb-8 {
+  margin-bottom: 3.2rem;
+}
+
 .mt-1 {
   margin-top: 0.4rem;
 }
@@ -166,4 +184,12 @@
 
 .shrink-0 {
   flex-shrink: 0;
+}
+
+.max-w-xs {
+  max-width: 20rem;
+}
+
+.letter-spacing-2 {
+  letter-spacing: 0.1rem;
 }
