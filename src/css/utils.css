@@ -34,6 +34,10 @@ html {
   color: var(--primary);
 }
 
+.text-error {
+  color: var(--danger);
+}
+
 .text-muted {
   color: var(--text-muted);
 }
@@ -192,4 +196,8 @@ html {
 
 .letter-spacing-2 {
   letter-spacing: 0.1rem;
+}
+
+.relative {
+  position: relative;
 }

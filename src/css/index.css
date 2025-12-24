@@ -67,6 +67,16 @@ textarea {
   border-radius: var(--radius);
 }
 
+.btn-show-password {
+  position: absolute;
+  right: 1.2rem;
+  top: 3.2rem;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
 /* 
 * Icons
 */
@@ -100,4 +110,24 @@ textarea {
   padding: 2rem;
   width: 100%;
   max-width: 400px;
+}
+
+/* 
+* Inputs
+*/
+.input {
+  border-radius: var(--radius);
+  background-color: var(--bg-input);
+  color: var(--primary);
+  padding: 1.5rem 1rem;
+  margin-top: 0.5rem;
+  outline: var(--primary) solid 1px;
+}
+
+.input:not(:last-child) {
+  margin-bottom: 2rem;
+}
+
+.input-bordered {
+  border: 1px solid var(--border-color);
 }

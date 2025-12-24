@@ -32,7 +32,11 @@ function App() {
         )}
       </div>
 
-      <Modal isOpen={showAuth} onClose={() => setShowAuth(false)} title="LOGIN">
+      <Modal
+        isOpen={showAuth}
+        onClose={() => setShowAuth(false)}
+        title="LOGIN OR SIGNUP"
+      >
         <AuthModal onSignUp={handleSignUp} onClose={() => setShowAuth(false)} />
       </Modal>
     </>
