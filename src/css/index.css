@@ -1,170 +1,4 @@
-/* 
-* Global color variables
-*/
-:root {
-  --bg-app: #0a0a0a;
-  --bg-card: #171717;
-  --bg-input: #000000;
-  --border-color: #262626;
-  --border-highlight: #f59e0b;
-  --text-main: #e5e5e5;
-  --text-muted: #737373;
-  --primary: #f59e0b;
-  --primary-rgb: 245, 158, 11;
-  --danger: #ef4444;
-  --success: #10b981;
-  --radius: 4px;
-  --safe-top: env(safe-area-inset-top, 20px);
-  --safe-bottom: env(safe-area-inset-bottom, 20px);
-  --nav-height: 65px;
-}
-
-/* 
-* Util styles
-*/
-.text-primary {
-  color: var(--primary);
-}
-
-.text-muted {
-  color: var(--text-muted);
-}
-
-.font-bold {
-  font-weight: 700;
-}
-
-.text-sm {
-  font-size: 0.875rem;
-}
-
-.text-xs {
-  font-size: 0.75rem;
-}
-
-.text-base {
-  font-size: 1rem;
-}
-
-.text-lg {
-  font-size: 1.25rem;
-}
-
-.text-xl {
-  font-size: 1.5rem;
-}
-
-.text-2xl {
-  font-size: 2rem;
-}
-
-.uppercase {
-  text-transform: uppercase;
-}
-
-.flex {
-  display: flex;
-}
-
-.flex-col {
-  flex-direction: column;
-}
-
-.items-center {
-  align-items: center;
-}
-
-.items-start {
-  align-items: flex-start;
-}
-
-.items-baseline {
-  align-items: baseline;
-}
-
-.items-end {
-  align-items: flex-end;
-}
-
-.justify-between {
-  justify-content: space-between;
-}
-
-.justify-center {
-  justify-content: center;
-}
-
-.gap-1 {
-  gap: 0.4rem;
-}
-
-.gap-2 {
-  gap: 0.8rem;
-}
-
-.gap-3 {
-  gap: 1.2rem;
-}
-
-.gap-4 {
-  gap: 1.6rem;
-}
-
-.mb-2 {
-  margin-bottom: 0.8rem;
-}
-
-.mb-4 {
-  margin-bottom: 1.6rem;
-}
-
-.mb-6 {
-  margin-bottom: 2.4rem;
-}
-
-.mt-1 {
-  margin-top: 0.4rem;
-}
-
-.mt-2 {
-  margin-top: 0.8rem;
-}
-
-.mt-3 {
-  margin-top: 1.2rem;
-}
-
-.p-2 {
-  padding: 0.8rem;
-}
-
-.p-4 {
-  padding: 1.6rem;
-}
-
-.p-6 {
-  padding: 2.4rem;
-}
-
-.h-full {
-  height: 100%;
-}
-
-.w-full {
-  width: 100%;
-}
-
-.text-center {
-  text-align: center;
-}
-
-.whitespace-nowrap {
-  white-space: nowrap;
-}
-
-.shrink-0 {
-  flex-shrink: 0;
-}
+@import "./utils.css";
 
 /* 
 * Resets
@@ -181,11 +15,25 @@ html {
 }
 
 body {
-  font-family: "Courier New", Courier, monospace;
+  font-family: var(--font-family-main);
   height: 100vh;
   width: 100vw;
   overflow: hidden;
   color: var(--text-main);
+}
+
+button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+}
+
+input,
+textarea {
+  outline: none;
+  font-family: inherit;
 }
 
 #root {
