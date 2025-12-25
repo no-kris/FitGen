@@ -7,7 +7,7 @@ const handleModeChange = (mode, setMode) => {
         <Button
           onClick={() => setMode("signup")}
           text="CREATE ACCOUNT"
-          className="text-primary underline"
+          className="text-primary"
         />
         <Button
           onClick={() => setMode("reset")}

@@ -201,3 +201,7 @@ html {
 .relative {
   position: relative;
 }
+
+.underline {
+  text-decoration: underline;
+}
