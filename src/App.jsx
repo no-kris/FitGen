@@ -12,57 +12,23 @@ function App() {
   const [view, setView] = useState("welcome");
   const [isGuest, setIsGuest] = useState(false);
 
-  const [profile, setProfile] = useState({
-    goal: "build muscle",
-    level: "beginner",
-    daysPerWeek: 3,
-    equipment: "full gym",
-    exclusions: [],
-    priorities: ["legs", "back", "chest"],
-  });
-  const [plan, setPlan] = useState({
-    goal: "build muscle",
-    level: "beginner",
-    daysPerWeek: 3,
-    equipment: "full gym",
-    exclusions: ["no heavy deadlifts", "no kettlebell"],
-    priorities: ["legs", "back", "chest"],
-  });
-  const [history, setHistory] = useState([
-    {
-      workout: {
-        focus: "legs",
-        date: new Date(),
-      },
-      duration: 60,
-      logs: [
-        {
-          exercise: "squat",
-          sets: 4,
-          reps: 12,
-          weight: 60,
-        },
-        {
-          exercise: "deadlift",
-          sets: 4,
-          reps: 12,
-          weight: 60,
-        },
-        {
-          exercise: "bench press",
-          sets: 4,
-          reps: 12,
-          weight: 60,
-        },
-      ],
-    },
-  ]);
+  const [profile, setProfile] = useState(null);
+  const [plan, setPlan] = useState(null);
+  const [history, setHistory] = useState([]);
   const [activeWorkout, setActiveWorkout] = useState(null);
 
   const [showAuth, setShowAuth] = useState(false);
 
   const saveToLocalStorage = (key, data) => {
     localStorage.setItem(key, JSON.stringify(data));
+  };
+
+  const handleGeneratePlan = (plan, profile) => {
+    setPlan(plan);
+    setProfile(profile);
+    saveToLocalStorage("fitgen-plan", plan);
+    saveToLocalStorage("fitgen-profile", profile);
+    setView("plan");
   };
 
   const handleSignUp = (user) => {
@@ -115,7 +81,7 @@ function App() {
                     handleLogout={isGuest ? null : handleLogout}
                   />
                 ) : (
-                  <ProfileSetupForm />
+                  <ProfileSetupForm onGeneratePlan={handleGeneratePlan} />
                 )}
               </div>
             )}

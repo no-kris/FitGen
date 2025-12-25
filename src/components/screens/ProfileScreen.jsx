@@ -39,7 +39,7 @@ export default function ProfileScreen({
         <Icon size={46} className="mb-4 text-primary" />
         <h2 className="text-2xl font-bold mb-2 uppercase">{profile.goal}</h2>
         <p className="text-base text-muted uppercase">
-          {profile.level} // {profile.daysPerWeek} DAYS/WEEK
+          {profile.level} // {profile.selectedDays.length} DAYS/WEEK
         </p>
         <div className="flex flex-col text-center gap-4 mt-4">
           <p className="text-lg font-bold text-primary uppercase letter-spacing-2 line-height-2">

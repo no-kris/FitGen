@@ -133,6 +133,20 @@ textarea {
   border-radius: var(--radius);
 }
 
+.btn-toggle {
+  width: 100%;
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+}
+
+.btn-selected {
+  background-color: rgba(var(--primary-rgb), 0.1);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
 /* 
 * Icons
 */
@@ -186,6 +200,11 @@ textarea {
 
 .input-bordered {
   border: 1px solid var(--border-color);
+}
+
+.slider {
+  width: 100%;
+  accent-color: var(--primary);
 }
 
 /* 
