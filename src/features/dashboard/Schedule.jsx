@@ -1,4 +1,4 @@
-import { Play, Settings } from "lucide-react";
+import { CheckCircle2, Play, Settings } from "lucide-react";
 import Button from "../../components/ui/Button";
 
 export default function Schedule({
@@ -25,13 +25,14 @@ export default function Schedule({
             </div>
             <span className="text-lg text-muted uppercase">{day.focus}</span>
           </div>
-          <div className="flex gap-4">
+          <div className="flex gap-6">
             {!done && (
               <>
                 <Button
                   onClick={() => setDetails({ ...day, index: index })}
                   Icon={Settings}
                   iconSize={20}
+                  className="px-2 py-1 text-muted bg-light"
                   text=""
                 />
                 <Button
@@ -43,12 +44,30 @@ export default function Schedule({
                   }
                   Icon={Play}
                   iconSize={20}
-                  className="text-primary font-bold"
+                  className="px-2 py-1 text-primary bg-light"
                   text=""
                 />
               </>
             )}
+            {done && <CheckCircle2 className="text-success" size={24} />}
           </div>
+        </div>
+        <div>
+          {day.exercises
+            .slice(0, day.exercises.length)
+            .map((exercise, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between mb-2"
+              >
+                <div className="flex items-center gap-2 text-lg">
+                  <span className="text-primary">::</span> {exercise.name}
+                </div>
+                <span className="text-base letter-spacing-2 text-muted whitespace-nowrap">
+                  {exercise.sets}x{exercise.reps}
+                </span>
+              </div>
+            ))}
         </div>
       </div>
     );

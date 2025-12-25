@@ -83,7 +83,7 @@ const generateInitialPlan = async (formData) => {
                   "sets": 3, 
                   "reps": "8-12", 
                   "rest": "60s", 
-                  "notes": "Cues for form or tempo", 
+                  "notes": "Keep chest up and core tight.", 
                   "alternatives": ["Exact Alt 1", "Exact Alt 2", "Exact Alt 3"] 
                 } 
               ] 
