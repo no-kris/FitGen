@@ -10,7 +10,7 @@ const renderStep = (step, setFormData, formData) => {
     case 1:
       stepContent = (
         <DisplayStep
-          list={["build muscle", "lose weight", "gain muscle"]}
+          list={["build muscle", "lose weight", "gain strength"]}
           handleClick={(option) =>
             setFormData({
               ...formData,

@@ -26,10 +26,10 @@ export default function ProfileScreen({
 
   const planDescription =
     `You have ${profile.equipment} equipment to workout with.` +
-    (profile.exclusions.length > 0
+    (profile.exclusions !== "None" && profile.exclusions.length > 0
       ? ` You have requested to avoid ${profile.exclusions.join(", ")}.`
       : " You have not requested any exclusions.") +
-    (profile.priorities.length > 0
+    (profile.priorities !== "None" && profile.priorities.length > 0
       ? ` You have requested to prioritize ${profile.priorities.join(", ")}.`
       : " You have not requested any priorities.");
 

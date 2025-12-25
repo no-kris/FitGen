@@ -1,10 +1,11 @@
 import { useState } from "react";
 import renderStep from "./helpers/renderStep";
-import { Settings } from "lucide-react";
+import { Loader2, Settings } from "lucide-react";
 import Button from "../../components/ui/Button";
 import handleNextStep from "./helpers/handleNextStep";
+import generateInitialPlan from "../../utils/generateInitialPlan";
 
-export default function ProfileSetupForm({ onGeneratePlan }) {
+export default function ProfileSetupForm({ onSavePlan }) {
   const [step, setStep] = useState(1);
   const totalSteps = 8;
   const [formData, setFormData] = useState({
@@ -19,6 +20,26 @@ export default function ProfileSetupForm({ onGeneratePlan }) {
   });
   const [isGenerating, setIsGenerating] = useState(false);
   const [errors, setErrors] = useState({});
+
+  const handleGenerate = async () => {
+    setIsGenerating(true);
+    try {
+      const plan = await generateInitialPlan(formData);
+      onSavePlan(plan, formData);
+    } catch (error) {
+      setErrors({ error: error.message });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleClickNext = () => {
+    if (step === totalSteps) {
+      handleGenerate();
+    } else {
+      handleNextStep(step, totalSteps, setStep, formData, setErrors);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -52,11 +73,19 @@ export default function ProfileSetupForm({ onGeneratePlan }) {
         />
         <Button
           onClick={() => {
-            handleNextStep(step, totalSteps, setStep, formData, setErrors);
+            handleClickNext();
           }}
           disabled={isGenerating}
           className="button btn-primary text-xl font-bold w-full p-4"
-          text={step === totalSteps ? "INITIATE PLAN" : "Next"}
+          text={
+            isGenerating ? (
+              <Loader2 className="animate-spin" />
+            ) : step === totalSteps ? (
+              "INITIATE PLAN"
+            ) : (
+              "Next"
+            )
+          }
         />
       </div>
     </div>

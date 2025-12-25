@@ -14,6 +14,8 @@ function App() {
 
   const [profile, setProfile] = useState(null);
   const [plan, setPlan] = useState(null);
+  console.log(plan);
+  console.log(profile);
   const [history, setHistory] = useState([]);
   const [activeWorkout, setActiveWorkout] = useState(null);
 
@@ -23,7 +25,7 @@ function App() {
     localStorage.setItem(key, JSON.stringify(data));
   };
 
-  const handleGeneratePlan = (plan, profile) => {
+  const handleSavePlan = (plan, profile) => {
     setPlan(plan);
     setProfile(profile);
     saveToLocalStorage("fitgen-plan", plan);
@@ -81,7 +83,7 @@ function App() {
                     handleLogout={isGuest ? null : handleLogout}
                   />
                 ) : (
-                  <ProfileSetupForm onGeneratePlan={handleGeneratePlan} />
+                  <ProfileSetupForm onSavePlan={handleSavePlan} />
                 )}
               </div>
             )}
