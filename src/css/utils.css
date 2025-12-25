@@ -34,6 +34,10 @@ html {
   color: var(--primary);
 }
 
+.text-dark {
+  color: var(--text-dark);
+}
+
 .text-error {
   color: var(--danger);
 }
@@ -44,6 +48,10 @@ html {
 
 .font-bold {
   font-weight: 700;
+}
+
+.font-semibold {
+  font-weight: 600;
 }
 
 .text-sm {

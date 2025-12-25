@@ -71,7 +71,7 @@ const generateInitialPlan = async (formData) => {
         {
           "weekNumber": 1,
           "description": "Phase focus (e.g., 'Neuromuscular Adaptation' or 'Hypertrophy Block 1').",
-          "coachNotes": "SYSTEM: PROFILE ANALYZED. EXCLUSIONS APPLIED. GENERATING OPTIMAL SEQUENCE.",
+          "coachNotes": "Coach note for week 1 (e.g., 'System: Profile Analyzed. Exclusions Applied. Generating Optimal Sequence.').",
           "schedule": [
             {
               "dayNumber": 1, 

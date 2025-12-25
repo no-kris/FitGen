@@ -6,6 +6,7 @@ import Layout from "./components/layout/Layout";
 import ProfileScreen from "./components/screens/ProfileScreen";
 import ProfileSetupForm from "./features/onboarding/ProfileSetupForm";
 import LogsScreen from "./components/screens/LogsScreen";
+import PlanDashboard from "./features/dashboard/PlanDashboard";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -65,7 +66,7 @@ function App() {
             isGuest={isGuest}
             onAuth={() => setShowAuth(true)}
           >
-            {view === "plan" && <h1>Plan</h1>}
+            {view === "plan" && <PlanDashboard plan={plan} history={history} />}
             {view === "logs" && (
               <div className="view-container">
                 <LogsScreen history={history} />

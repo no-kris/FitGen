@@ -147,6 +147,18 @@ textarea {
   color: var(--primary);
 }
 
+.bg-primary {
+  background-color: var(--primary);
+  width: fit-content;
+  border-radius: var(--radius);
+}
+
+.bg-muted {
+  background-color: var(--bg-muted);
+  width: fit-content;
+  border-radius: var(--radius);
+}
+
 /* 
 * Icons
 */

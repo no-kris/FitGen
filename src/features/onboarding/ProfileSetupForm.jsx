@@ -14,7 +14,7 @@ export default function ProfileSetupForm({ onSavePlan }) {
     selectedDays: ["Monday", "Wednesday", "Friday"],
     equipment: "full gym",
     duration: 60,
-    weeks: 4,
+    weeks: 6,
     exclusions: [],
     priorities: [],
   });
@@ -79,7 +79,7 @@ export default function ProfileSetupForm({ onSavePlan }) {
           className="button btn-primary text-xl font-bold w-full p-4"
           text={
             isGenerating ? (
-              <Loader2 className="animate-spin" />
+              <Loader2 className="animate-spin" size={16} />
             ) : step === totalSteps ? (
               "INITIATE PLAN"
             ) : (
