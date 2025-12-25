@@ -158,8 +158,16 @@ html {
   margin-top: 1.2rem;
 }
 
+.mt-4 {
+  margin-top: 1.6rem;
+}
+
 .p-2 {
   padding: 0.8rem;
+}
+
+.p-3 {
+  padding: 1.2rem;
 }
 
 .p-4 {
@@ -182,6 +190,10 @@ html {
   text-align: center;
 }
 
+.text-left {
+  text-align: left;
+}
+
 .whitespace-nowrap {
   white-space: nowrap;
 }
@@ -196,6 +208,10 @@ html {
 
 .letter-spacing-2 {
   letter-spacing: 0.1rem;
+}
+
+.line-height-2 {
+  line-height: 2rem;
 }
 
 .relative {
