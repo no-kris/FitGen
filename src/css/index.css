@@ -87,7 +87,7 @@ textarea {
   border-radius: var(--radius);
   padding: 2rem;
   position: relative;
-  box-shadow: 0 0.5rem 1rem rgba(217, 255, 0, 0.1);
+  box-shadow: 0 0.5rem 1rem rgba(var(--primary-rgb), 0.1);
 }
 
 /* 

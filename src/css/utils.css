@@ -178,6 +178,11 @@ html {
   padding: 2.4rem;
 }
 
+.py-10 {
+  padding-top: 2.4rem;
+  padding-bottom: 2.4rem;
+}
+
 .h-full {
   height: 100%;
 }
@@ -220,4 +225,9 @@ html {
 
 .underline {
   text-decoration: underline;
+}
+
+.border-b {
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.8rem;
 }
