@@ -2,12 +2,20 @@ import { useEffect, useState } from "react";
 import Button from "../../components/ui/Button";
 import Schedule from "./Schedule";
 import { CheckCircle2, Notebook, PlusCircle } from "lucide-react";
+import FeedbackModal from "../workout/FeedbackModal";
 
-export default function PlanDashboard({ plan, history, setView }) {
+export default function PlanDashboard({
+  plan,
+  history,
+  setView,
+  onGenerateNextWeek,
+}) {
   const [weekIndex, setWeekIndex] = useState(0);
   const [details, setDetails] = useState(null);
   const [activeWorkout, setActiveWorkout] = useState(null);
   const [showCheckin, setShowCheckin] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   if (!plan || !plan.weeks || plan.totalWeeks === 0)
     return (
@@ -50,6 +58,18 @@ export default function PlanDashboard({ plan, history, setView }) {
     )
   );
 
+  const handleCheckin = async (feedback) => {
+    setIsLoading(true);
+    try {
+      await onGenerateNextWeek(feedback);
+      setShowCheckin(false);
+    } catch (error) {
+      setError(error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="view-container p-2">
       <div className="flex flex-col gap-3 justify-between border-b pb-2">
@@ -62,13 +82,11 @@ export default function PlanDashboard({ plan, history, setView }) {
         </div>
       </div>
 
-      <div>
+      <div className="flex gap-4 mt-4">
         {plan.weeks.map((week, index) => (
           <div
             key={index}
-            className={`mt-4 p-2 flex gap-4 ${
-              weekIndex === index ? "bg-primary" : "bg-muted"
-            }`}
+            className={`p-2 ${weekIndex === index ? "bg-primary" : "bg-muted"}`}
           >
             <Button
               onClick={() => setWeekIndex(index)}
@@ -112,16 +130,29 @@ export default function PlanDashboard({ plan, history, setView }) {
         </div>
       ) : (
         isLastAvailableWeek && (
-          <Button
-            text={`CHECK-IN & GENERATE WEEK ${currentWeek.weekNumber + 1}`}
-            Icon={PlusCircle}
-            iconSize={24}
-            onClick={() => setShowCheckin(true)}
-            className="flex items-center justify-center gap-4 button btn-primary w-full font-bold text-xl uppercase p-4 letter-spacing-2 mt-4"
-            disabled={!allWorkoutsCompleted}
-          />
+          <>
+            {error && (
+              <div className="text-center text-error">{error.message}</div>
+            )}
+            <Button
+              text={`CHECK-IN & GENERATE WEEK ${currentWeek.weekNumber + 1}`}
+              Icon={PlusCircle}
+              iconSize={24}
+              onClick={() => setShowCheckin(true)}
+              className="flex items-center justify-center gap-4 button btn-primary w-full font-bold text-xl uppercase p-4 letter-spacing-2 mt-4"
+              disabled={!allWorkoutsCompleted}
+            />
+          </>
         )
       )}
+
+      <FeedbackModal
+        isOpen={showCheckin}
+        onClose={() => setShowCheckin(false)}
+        isLoading={isLoading}
+        weekNumber={currentWeek.weekNumber}
+        onCheckin={handleCheckin}
+      />
     </div>
   );
 }

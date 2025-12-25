@@ -7,6 +7,7 @@ import ProfileScreen from "./components/screens/ProfileScreen";
 import ProfileSetupForm from "./features/onboarding/ProfileSetupForm";
 import LogsScreen from "./components/screens/LogsScreen";
 import PlanDashboard from "./features/dashboard/PlanDashboard";
+import generateNextWeekPlan from "./utils/generateNextWeekPlan";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -15,8 +16,6 @@ function App() {
 
   const [profile, setProfile] = useState(null);
   const [plan, setPlan] = useState(null);
-  console.log(plan);
-  console.log(profile);
   const [history, setHistory] = useState([]);
   const [activeWorkout, setActiveWorkout] = useState(null);
 
@@ -48,6 +47,29 @@ function App() {
     setView("welcome");
   };
 
+  const handleGenerateNextWeek = async (feedback) => {
+    try {
+      const result = await generateNextWeekPlan(
+        profile,
+        plan,
+        history,
+        feedback
+      );
+      const newWeek = result.weeks[0];
+      const newWeekPlan = {
+        ...plan,
+        programName: result.programName,
+        description: result.description,
+        weeks: [...plan.weeks, newWeek],
+      };
+      setPlan(newWeekPlan);
+      saveToLocalStorage("fitgen-plan", newWeekPlan);
+      setView("plan");
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   return (
     <>
       <div className="app-container">
@@ -67,7 +89,12 @@ function App() {
             onAuth={() => setShowAuth(true)}
           >
             {view === "plan" && (
-              <PlanDashboard plan={plan} history={history} setView={setView} />
+              <PlanDashboard
+                plan={plan}
+                history={history}
+                setView={setView}
+                onGenerateNextWeek={handleGenerateNextWeek}
+              />
             )}
             {view === "logs" && (
               <div className="view-container">
