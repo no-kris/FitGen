@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import Button from "../../components/ui/Button";
+import Schedule from "./Schedule";
+import { Notebook } from "lucide-react";
 
-export default function PlanDashboard({ plan, history }) {
+export default function PlanDashboard({ plan, history, setView }) {
   const [weekIndex, setWeekIndex] = useState(0);
   const [details, setDetails] = useState(null);
+  const [activeWorkout, setActiveWorkout] = useState(null);
 
   if (!plan || !plan.weeks || plan.totalWeeks === 0)
     return (
@@ -21,6 +24,19 @@ export default function PlanDashboard({ plan, history }) {
     return (
       <div className="text-center text-2xl text-muted p-6">LOADING...</div>
     );
+
+  const handleCompleted = (day) => {
+    history.some(
+      (h) =>
+        h.workout.dayName === day.dayName &&
+        h.workout.weekNumber === currentWeek.weekNumber
+    );
+  };
+
+  const handleStartWorkout = (day) => {
+    setActiveWorkout(day);
+    setView("active");
+  };
 
   return (
     <div className="view-container p-2">
@@ -51,6 +67,27 @@ export default function PlanDashboard({ plan, history }) {
             />
           </div>
         ))}
+      </div>
+
+      {currentWeek.coachNotes && (
+        <div className="card flex flex-col gap-3 mt-4">
+          <div className="flex gap-4 border-b pb-2 items-center">
+            <Notebook className="text-primary" size={24} />
+            <h2 className="text-2xl font-bold text-primary">Coach Logs</h2>
+          </div>
+          <p className="mt-2 text-lg text-muted letter-spacing-2 line-height-1">
+            {currentWeek.coachNotes}
+          </p>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-3 mt-4">
+        <Schedule
+          currentWeek={currentWeek}
+          setDetails={setDetails}
+          onCompleted={handleCompleted}
+          onStartWorkout={handleStartWorkout}
+        />
       </div>
     </div>
   );

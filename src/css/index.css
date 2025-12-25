@@ -44,26 +44,29 @@ textarea {
 }
 
 .app-container {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .content-area {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 2rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 12rem;
+  padding-left: 2rem;
+  padding-right: 2rem;
+  padding-top: calc(var(--safe-top) + 2rem);
   position: relative;
   -webkit-overflow-scrolling: touch;
 }
 
 .content-area.has-nav {
-  padding-top: calc(var(--nav-height) + var(--safe-top) + 2rem);
+  padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + 6.4rem);
 }
 
 .view-container {
@@ -87,7 +90,6 @@ textarea {
   border-radius: var(--radius);
   padding: 2rem;
   position: relative;
-  box-shadow: 0 0.5rem 1rem rgba(var(--primary-rgb), 0.1);
 }
 
 /* 

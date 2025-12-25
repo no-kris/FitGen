@@ -66,7 +66,9 @@ function App() {
             isGuest={isGuest}
             onAuth={() => setShowAuth(true)}
           >
-            {view === "plan" && <PlanDashboard plan={plan} history={history} />}
+            {view === "plan" && (
+              <PlanDashboard plan={plan} history={history} setView={setView} />
+            )}
             {view === "logs" && (
               <div className="view-container">
                 <LogsScreen history={history} />
