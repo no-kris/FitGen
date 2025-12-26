@@ -261,6 +261,10 @@ html {
   position: relative;
 }
 
+.sticky {
+  position: sticky;
+}
+
 .underline {
   text-decoration: underline;
 }

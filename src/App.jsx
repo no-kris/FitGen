@@ -93,6 +93,7 @@ function App() {
 
   const handleStartWorkout = (day) => {
     setActiveWorkout(day);
+    console.log(activeWorkout);
     setView("active");
   };
 
@@ -163,10 +164,9 @@ function App() {
             {view === "active" && activeWorkout && (
               <div>
                 <ActiveWorkout
-                  activeWorkout={activeWorkout}
+                  workout={activeWorkout}
                   onFinish={handleFinishWorkout}
                   onClose={() => {
-                    setActiveWorkout(null);
                     setView("plan");
                   }}
                 />
