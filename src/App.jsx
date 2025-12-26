@@ -70,6 +70,28 @@ function App() {
     }
   };
 
+  const handleReplaceExercise = (
+    weekIndex,
+    dayIndex,
+    exerciseIndex,
+    newExerciseName
+  ) => {
+    const newPlan = JSON.parse(JSON.stringify(plan));
+    const exercise =
+      newPlan.weeks[weekIndex].schedule[dayIndex].exercises[exerciseIndex];
+
+    const oldName = exercise.name;
+
+    exercise.alternatives = exercise.alternatives.filter(
+      (alt) => alt !== newExerciseName
+    );
+    exercise.alternatives.push(oldName);
+    exercise.name = newExerciseName;
+
+    setPlan(newPlan);
+    saveToLocalStorage("fitgen-plan", newPlan);
+  };
+
   return (
     <>
       <div className="app-container">
@@ -94,6 +116,7 @@ function App() {
                 history={history}
                 setView={setView}
                 onGenerateNextWeek={handleGenerateNextWeek}
+                onReplaceExercise={handleReplaceExercise}
               />
             )}
             {view === "logs" && (

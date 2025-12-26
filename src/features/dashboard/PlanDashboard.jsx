@@ -3,12 +3,14 @@ import Button from "../../components/ui/Button";
 import Schedule from "./Schedule";
 import { CheckCircle2, Notebook, PlusCircle } from "lucide-react";
 import FeedbackModal from "../workout/FeedbackModal";
+import DayDetailModal from "../workout/DayDetailModal";
 
 export default function PlanDashboard({
   plan,
   history,
   setView,
   onGenerateNextWeek,
+  onReplaceExercise,
 }) {
   const [weekIndex, setWeekIndex] = useState(0);
   const [details, setDetails] = useState(null);
@@ -152,6 +154,15 @@ export default function PlanDashboard({
         isLoading={isLoading}
         weekNumber={currentWeek.weekNumber}
         onCheckin={handleCheckin}
+      />
+
+      <DayDetailModal
+        isOpen={!!details}
+        onClose={() => setDetails(null)}
+        details={details}
+        onReplaceExercise={(exIndex, newEx) => {
+          onReplaceExercise(weekIndex, details.index, exIndex, newEx);
+        }}
       />
     </div>
   );
