@@ -25,7 +25,7 @@ export default function Schedule({
             </div>
             <span className="text-lg text-muted uppercase">{day.focus}</span>
           </div>
-          <div className="flex gap-6">
+          <div className="flex gap-4">
             {!done && (
               <>
                 <Button

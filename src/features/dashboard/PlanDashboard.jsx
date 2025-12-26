@@ -8,13 +8,12 @@ import DayDetailModal from "../workout/DayDetailModal";
 export default function PlanDashboard({
   plan,
   history,
-  setView,
+  onStartWorkout,
   onGenerateNextWeek,
   onReplaceExercise,
 }) {
   const [weekIndex, setWeekIndex] = useState(0);
   const [details, setDetails] = useState(null);
-  const [activeWorkout, setActiveWorkout] = useState(null);
   const [showCheckin, setShowCheckin] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -42,11 +41,6 @@ export default function PlanDashboard({
         h.workout.dayName === day.dayName &&
         h.workout.weekNumber === currentWeek.weekNumber
     );
-  };
-
-  const handleStartWorkout = (day) => {
-    setActiveWorkout(day);
-    setView("active");
   };
 
   const isLastAvailableWeek = weekIndex === plan.weeks.length - 1;
@@ -118,7 +112,7 @@ export default function PlanDashboard({
           currentWeek={currentWeek}
           setDetails={setDetails}
           onCompleted={handleCompleted}
-          onStartWorkout={handleStartWorkout}
+          onStartWorkout={onStartWorkout}
         />
       </div>
 

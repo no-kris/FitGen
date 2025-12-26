@@ -8,17 +8,16 @@ import ProfileSetupForm from "./features/onboarding/ProfileSetupForm";
 import LogsScreen from "./components/screens/LogsScreen";
 import PlanDashboard from "./features/dashboard/PlanDashboard";
 import generateNextWeekPlan from "./utils/generateNextWeekPlan";
+import ActiveWorkout from "./features/workout/ActiveWorkout";
 
 function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState("welcome");
   const [isGuest, setIsGuest] = useState(false);
-
   const [profile, setProfile] = useState(null);
   const [plan, setPlan] = useState(null);
   const [history, setHistory] = useState([]);
   const [activeWorkout, setActiveWorkout] = useState(null);
-
   const [showAuth, setShowAuth] = useState(false);
 
   const saveToLocalStorage = (key, data) => {
@@ -92,6 +91,29 @@ function App() {
     saveToLocalStorage("fitgen-plan", newPlan);
   };
 
+  const handleStartWorkout = (day) => {
+    setActiveWorkout(day);
+    setView("active");
+  };
+
+  const handleFinishWorkout = (log) => {
+    const updatedHistory = [...history, log];
+    setHistory(updatedHistory);
+    saveToLocalStorage("fitgen-history", updatedHistory);
+    setActiveWorkout(null);
+    setView("logs");
+  };
+
+  const handleResetSystem = () => {
+    setPlan(null);
+    setProfile(null);
+    setHistory([]);
+    localStorage.removeItem("fitgen-plan");
+    localStorage.removeItem("fitgen-profile");
+    localStorage.removeItem("fitgen-history");
+    setView("profile");
+  };
+
   return (
     <>
       <div className="app-container">
@@ -114,7 +136,7 @@ function App() {
               <PlanDashboard
                 plan={plan}
                 history={history}
-                setView={setView}
+                onStartWorkout={handleStartWorkout}
                 onGenerateNextWeek={handleGenerateNextWeek}
                 onReplaceExercise={handleReplaceExercise}
               />
@@ -129,15 +151,25 @@ function App() {
                 {plan ? (
                   <ProfileScreen
                     profile={profile}
-                    setPlan={setPlan}
-                    setProfile={setProfile}
-                    setView={setView}
+                    onResetSystem={handleResetSystem}
                     isGuest={isGuest}
                     handleLogout={isGuest ? null : handleLogout}
                   />
                 ) : (
                   <ProfileSetupForm onSavePlan={handleSavePlan} />
                 )}
+              </div>
+            )}
+            {view === "active" && activeWorkout && (
+              <div>
+                <ActiveWorkout
+                  activeWorkout={activeWorkout}
+                  onFinish={handleFinishWorkout}
+                  onClose={() => {
+                    setActiveWorkout(null);
+                    setView("plan");
+                  }}
+                />
               </div>
             )}
           </Layout>

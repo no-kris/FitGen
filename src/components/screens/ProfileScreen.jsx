@@ -3,20 +3,10 @@ import Button from "../ui/Button";
 
 export default function ProfileScreen({
   profile,
-  setPlan,
-  setProfile,
-  setView,
+  onResetSystem,
   isGuest,
   handleLogout,
 }) {
-  const handleResetSystem = () => {
-    setPlan(null);
-    setProfile(null);
-    localStorage.removeItem("fitgen-plan");
-    localStorage.removeItem("fitgen-profile");
-    setView("profile");
-  };
-
   const Icon =
     profile.goal.toLowerCase() === "build muscle"
       ? Dumbbell
@@ -50,7 +40,7 @@ export default function ProfileScreen({
       <Button
         text="RESET SYSTEM"
         onClick={() => {
-          handleResetSystem;
+          onResetSystem;
         }}
         icon={Settings}
         iconSize={20}

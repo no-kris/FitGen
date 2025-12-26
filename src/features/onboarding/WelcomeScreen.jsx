@@ -9,7 +9,7 @@ export default function WelcomeScreen({ onGuestMode, onAuth }) {
         FitGen<span className="text-primary">.AI</span>
       </h1>
       <p className="text-lg mb-6 text-muted">
-        ADVANCED HYPERTROPHY ALGORITHMS. PERSONALIZED. ADAPTIVE.
+        ADVANCED HYPERTROPHY ALGORITHMS. PERSONALIZED PLANS. ADAPTIVE TRAINING.
       </p>
       <div className="flex flex-col gap-4 max-w-xs">
         <Button
