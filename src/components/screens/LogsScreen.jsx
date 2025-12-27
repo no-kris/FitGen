@@ -16,25 +16,45 @@ export default function LogsScreen({ history }) {
             <div key={index} className="card p-6 mb-4">
               <div className="flex justify-between mb-2 border-b">
                 <span className="text-lg font-bold text-primary uppercase">
-                  {entry.workout.focus}
+                  {entry?.workout?.focus}
                 </span>
                 <div className="text-base uppercase">
-                  {Math.floor(entry.duration / 60)} MINUTES /{" "}
-                  {entry.logs.length} EXERCISES
+                  {Math.floor((entry?.duration || 0) / 60)} MINUTES /{" "}
+                  {entry?.logs?.length || 0} EXERCISES
                 </div>
                 <span className="text-base text-muted uppercase">
-                  {new Date(entry.workout.date).toLocaleDateString()}
+                  {entry?.workout?.date
+                    ? new Date(entry.workout.date).toLocaleDateString()
+                    : ""}
                 </span>
               </div>
 
               <div className="mt-4 flex flex-col gap-2">
-                {entry.logs.map((log, index) => (
-                  <div key={index} className="flex justify-between">
+                {entry?.logs?.map((log, index) => (
+                  <div key={index} className="flex flex-col gap-1 mb-2">
                     <div className="text-lg font-bold text-primary uppercase">
-                      {log.exercise}
+                      {log.name || log.exercise}
                     </div>
                     <div className="text-base text-muted uppercase">
-                      {log.sets} SETS / {log.reps} REPS / {log.weight} LBS
+                      {Array.isArray(log.sets) ? (
+                        <div className="flex flex-col">
+                          {log.sets
+                            .filter((s) => s.completed)
+                            .map((s, i) => (
+                              <span key={i}>
+                                SET {i + 1}: {s.weight || 0}LBS x {s.reps || 0}{" "}
+                                REPS
+                              </span>
+                            ))}
+                          {log.sets.filter((s) => s.completed).length === 0 && (
+                            <span>NO COMPLETED SETS</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span>
+                          {log.sets} SETS / {log.reps} REPS / {log.weight} LBS
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}

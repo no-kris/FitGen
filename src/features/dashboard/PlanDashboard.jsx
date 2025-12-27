@@ -38,8 +38,8 @@ export default function PlanDashboard({
   const handleCompleted = (day) => {
     return history.some(
       (h) =>
-        h.workout.dayName === day.dayName &&
-        h.workout.weekNumber === currentWeek.weekNumber
+        h?.workout?.dayName === day.dayName &&
+        h?.workout?.weekNumber === currentWeek.weekNumber
     );
   };
 
@@ -49,8 +49,8 @@ export default function PlanDashboard({
   const allWorkoutsCompleted = currentWeek.schedule.every((day) =>
     history.some(
       (h) =>
-        h.workout.dayName === day.dayName &&
-        h.workout.weekNumber === currentWeek.weekNumber
+        h?.workout?.dayName === day.dayName &&
+        h?.workout?.weekNumber === currentWeek.weekNumber
     )
   );
 

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Button from "../../components/ui/Button";
 import formatTimer from "../../utils/formatTimer";
 import WorkoutCard from "./WorkoutCard";
+import Modal from "../../components/ui/Modal";
 
 export default function ActiveWorkout({ workout, onFinish, onClose }) {
   const [logs, setLogs] = useState(
@@ -18,6 +19,7 @@ export default function ActiveWorkout({ workout, onFinish, onClose }) {
       }))
   );
   const [timer, setTimer] = useState(workout.elapsed || 0);
+  const [showConfirm, setShowConfirm] = useState(null);
 
   useEffect(() => {
     const interval = setInterval(() => setTimer((t) => t + 1), 1000);
@@ -31,31 +33,94 @@ export default function ActiveWorkout({ workout, onFinish, onClose }) {
     );
   }, [logs, timer, workout]);
 
+  const handleSaveProgress = () => {
+    try {
+      const stored = localStorage.getItem("fitgen-active");
+      const currentWorkout = stored ? JSON.parse(stored) : null;
+
+      const updatedWorkout = {
+        ...(currentWorkout || { workout }), // Fallback to current props if LS is missing
+        elapsed: timer,
+        logs,
+      };
+      localStorage.setItem("fitgen-active", JSON.stringify(updatedWorkout));
+    } catch (e) {
+      console.error("Error saving progress", e);
+    }
+    onClose();
+  };
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b flex items-center justify-between sticky">
-        <Button
-          onClick={() => onClose()}
-          Icon={ArrowLeft}
-          iconSize={24}
-          text=""
-          className="text-muted"
-        />
-        <div className="text-center flex flex-col gap-2">
-          <span className="text-xl font-bold text-primary">
-            {formatTimer(timer)}
-          </span>
+    <>
+      <div className="flex flex-col h-full">
+        <div className="p-4 border-b flex items-center justify-between sticky">
+          <Button
+            onClick={() => setShowConfirm("exit")}
+            Icon={ArrowLeft}
+            iconSize={24}
+            text=""
+            className="text-muted"
+          />
+          <div className="text-center flex flex-col gap-2">
+            <span className="text-xl font-bold text-primary">
+              {formatTimer(timer)}
+            </span>
+          </div>
+          <Button
+            text="FINISH"
+            onClick={() => setShowConfirm("finish")}
+            className="text-lg bg-primary text-dark p-2 letter-spacing-2"
+          />
         </div>
-        <Button
-          text="FINISH"
-          onClick={() => onClose()}
-          className="text-lg bg-primary text-dark p-2 letter-spacing-2"
-        />
+
+        <div className="p-4 flex flex-col gap-4">
+          <WorkoutCard workout={workout} logs={logs} setLogs={setLogs} />
+        </div>
       </div>
 
-      <div className="p-4 flex flex-col gap-4">
-        <WorkoutCard workout={workout} logs={logs} setLogs={setLogs} />
-      </div>
-    </div>
+      <Modal
+        isOpen={showConfirm}
+        onClose={() => setShowConfirm(null)}
+        title="Confirm Finish"
+        children={
+          <div className="flex flex-col gap-2">
+            <p className="text-lg font-bold">{`${
+              showConfirm === "exit" ? "Save progress?" : "Finished workout?"
+            }`}</p>
+            <div className="flex justify-center w-full gap-2">
+              <Button
+                text="Cancel"
+                onClick={() => setShowConfirm(null)}
+                className="button btn-muted w-full font-bold text-lg uppercase p-4 letter-spacing-2"
+              />
+              <Button
+                text={showConfirm === "exit" ? "Save" : "Finish"}
+                onClick={
+                  showConfirm === "exit"
+                    ? () => handleSaveProgress()
+                    : () =>
+                        onFinish({
+                          workout,
+                          logs,
+                          duration: timer,
+                        })
+                }
+                className="button btn-primary w-full font-bold text-lg uppercase p-4 letter-spacing-2"
+              />
+              {showConfirm === "exit" && (
+                <Button
+                  text="Discard"
+                  onClick={() => {
+                    localStorage.removeItem("fitgen-active");
+                    onClose();
+                  }}
+                  className="button btn-danger w-full font-bold text-lg uppercase p-4 letter-spacing-2"
+                />
+              )}
+            </div>
+          </div>
+        }
+      />
+    </>
   );
 }

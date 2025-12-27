@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import WelcomeScreen from "./features/onboarding/WelcomeScreen";
 import Modal from "./components/ui/Modal";
 import AuthModal from "./features/auth/AuthModal";
@@ -23,6 +23,25 @@ function App() {
   const saveToLocalStorage = (key, data) => {
     localStorage.setItem(key, JSON.stringify(data));
   };
+
+  useEffect(() => {
+    const localUser = localStorage.getItem("fitgen-user");
+    const localPlan = localStorage.getItem("fitgen-plan");
+    const localProfile = localStorage.getItem("fitgen-profile");
+    const localHistory = localStorage.getItem("fitgen-history");
+    if (localUser) setUser(JSON.parse(localUser));
+    if (localPlan) setPlan(JSON.parse(localPlan));
+    if (localProfile) setProfile(JSON.parse(localProfile));
+    if (localHistory) {
+      const parsedHistory = JSON.parse(localHistory);
+      // Filter out any null/invalid entries to prevent crashes
+      setHistory(
+        Array.isArray(parsedHistory)
+          ? parsedHistory.filter((h) => h && h.workout)
+          : []
+      );
+    }
+  }, []);
 
   const handleSavePlan = (plan, profile) => {
     setPlan(plan);
@@ -92,8 +111,13 @@ function App() {
   };
 
   const handleStartWorkout = (day) => {
-    setActiveWorkout(day);
-    console.log(activeWorkout);
+    const savedState = localStorage.getItem("fitgen-active");
+    if (savedState) {
+      const parsed = JSON.parse(savedState);
+      setActiveWorkout({ ...day, logs: parsed.logs, elapsed: parsed.elapsed });
+    } else {
+      setActiveWorkout(day);
+    }
     setView("active");
   };
 
@@ -101,6 +125,7 @@ function App() {
     const updatedHistory = [...history, log];
     setHistory(updatedHistory);
     saveToLocalStorage("fitgen-history", updatedHistory);
+    localStorage.removeItem("fitgen-active");
     setActiveWorkout(null);
     setView("logs");
   };
@@ -112,6 +137,7 @@ function App() {
     localStorage.removeItem("fitgen-plan");
     localStorage.removeItem("fitgen-profile");
     localStorage.removeItem("fitgen-history");
+    localStorage.removeItem("fitgen-active");
     setView("profile");
   };
 

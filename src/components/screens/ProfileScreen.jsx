@@ -40,7 +40,7 @@ export default function ProfileScreen({
       <Button
         text="RESET SYSTEM"
         onClick={() => {
-          onResetSystem;
+          onResetSystem();
         }}
         icon={Settings}
         iconSize={20}
@@ -50,7 +50,7 @@ export default function ProfileScreen({
         <Button
           text="LOGOUT"
           onClick={() => {
-            handleLogout;
+            handleLogout();
           }}
           icon={LogOut}
           iconSize={20}
