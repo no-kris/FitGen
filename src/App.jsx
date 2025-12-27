@@ -9,6 +9,7 @@ import LogsScreen from "./components/screens/LogsScreen";
 import PlanDashboard from "./features/dashboard/PlanDashboard";
 import generateNextWeekPlan from "./utils/generateNextWeekPlan";
 import ActiveWorkout from "./features/workout/ActiveWorkout";
+import saveToLocalStorage from "./utils/saveToLocalStorage";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -19,10 +20,6 @@ function App() {
   const [history, setHistory] = useState([]);
   const [activeWorkout, setActiveWorkout] = useState(null);
   const [showAuth, setShowAuth] = useState(false);
-
-  const saveToLocalStorage = (key, data) => {
-    localStorage.setItem(key, JSON.stringify(data));
-  };
 
   useEffect(() => {
     const localUser = localStorage.getItem("fitgen-user");
