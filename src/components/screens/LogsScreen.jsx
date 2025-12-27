@@ -1,4 +1,10 @@
+import { useState } from "react";
+import Button from "../ui/Button";
+import { ArrowDown, ArrowUp } from "lucide-react";
+
 export default function LogsScreen({ history }) {
+  const [dropdown, setDropDown] = useState(false);
+
   return (
     <>
       <h2 className="text-2xl font-bold mb-2 uppercase pb-2 text-center">
@@ -39,34 +45,49 @@ export default function LogsScreen({ history }) {
               </div>
 
               <div className="mt-4 flex flex-col gap-2">
-                {entry?.logs?.map((log, index) => (
-                  <div key={index} className="flex flex-col gap-1 mb-2">
-                    <div className="text-lg font-bold text-primary uppercase">
-                      {log.name || log.exercise}
+                {dropdown ? (
+                  <Button
+                    onClick={() => setDropDown(false)}
+                    Icon={ArrowUp}
+                    iconSize={16}
+                  />
+                ) : (
+                  <Button
+                    onClick={() => setDropDown(true)}
+                    Icon={ArrowDown}
+                    iconSize={16}
+                    text="View Details"
+                    className="flex flex-col items-center gap-2"
+                  />
+                )}
+                {dropdown &&
+                  entry?.logs?.map((log, index) => (
+                    <div key={index} className="flex flex-col gap-1 mb-2">
+                      <div className="text-lg font-bold text-primary uppercase">
+                        {log.name || log.exercise}
+                      </div>
+                      <div className="text-base text-muted uppercase">
+                        {Array.isArray(log.sets) ? (
+                          <div className="flex flex-col">
+                            {log.sets
+                              .filter((s) => s.completed)
+                              .map((s, i) => (
+                                <span key={i}>
+                                  SET {i + 1}: {s.weight || 0}LBS x{" "}
+                                  {s.reps || 0} REPS
+                                </span>
+                              ))}
+                            {log.sets.filter((s) => s.completed).length ===
+                              0 && <span>NO COMPLETED SETS</span>}
+                          </div>
+                        ) : (
+                          <span>
+                            {log.sets} SETS / {log.reps} REPS / {log.weight} LBS
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-base text-muted uppercase">
-                      {Array.isArray(log.sets) ? (
-                        <div className="flex flex-col">
-                          {log.sets
-                            .filter((s) => s.completed)
-                            .map((s, i) => (
-                              <span key={i}>
-                                SET {i + 1}: {s.weight || 0}LBS x {s.reps || 0}{" "}
-                                REPS
-                              </span>
-                            ))}
-                          {log.sets.filter((s) => s.completed).length === 0 && (
-                            <span>NO COMPLETED SETS</span>
-                          )}
-                        </div>
-                      ) : (
-                        <span>
-                          {log.sets} SETS / {log.reps} REPS / {log.weight} LBS
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </div>
           ))
