@@ -16,6 +16,9 @@ export default function LogsScreen({ history }) {
             <div key={index} className="card p-6 mb-4">
               <div className="flex justify-between mb-2 border-b">
                 <span className="text-lg font-bold text-primary uppercase">
+                  {entry?.workout?.dayName}
+                </span>
+                <span className="text-lg font-bold text-primary uppercase">
                   {entry?.workout?.focus}
                 </span>
                 <div className="text-base uppercase">
