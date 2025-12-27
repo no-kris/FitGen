@@ -119,7 +119,14 @@ function App() {
   };
 
   const handleFinishWorkout = (log) => {
-    const updatedHistory = [...history, log];
+    const updatedLog = {
+      ...log,
+      workout: {
+        ...log.workout,
+        date: new Date().toISOString(),
+      },
+    };
+    const updatedHistory = [...history, updatedLog];
     setHistory(updatedHistory);
     saveToLocalStorage("fitgen-history", updatedHistory);
     localStorage.removeItem("fitgen-active");

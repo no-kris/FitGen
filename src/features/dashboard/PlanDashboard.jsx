@@ -117,10 +117,12 @@ export default function PlanDashboard({
       </div>
 
       {isProgramCompleted ? (
-        <div className="card flex text-center border-primary">
-          <CheckCircle2 size={40} className="text-primary mx-auto mb-2" />
-          <h3 className="text-primary font-bold">PROGRAM COMPLETE</h3>
-          <p className="text-muted text-xs mt-2">
+        <div className="card flex flex-col text-center border-primary mt-4">
+          <div>
+            <CheckCircle2 size={40} className="text-success mx-auto mb-2" />
+            <h3 className="text-success text-xl font-bold">PROGRAM COMPLETE</h3>
+          </div>
+          <p className="text-muted text-base mt-2">
             SYSTEM STANDBY. RESET TO BEGIN NEW CYCLE.
           </p>
         </div>

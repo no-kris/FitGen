@@ -14,22 +14,28 @@ export default function LogsScreen({ history }) {
           .reverse()
           .map((entry, index) => (
             <div key={index} className="card p-6 mb-4">
-              <div className="flex justify-between mb-2 border-b">
-                <span className="text-lg font-bold text-primary uppercase">
-                  {entry?.workout?.dayName}
-                </span>
-                <span className="text-lg font-bold text-primary uppercase">
-                  {entry?.workout?.focus}
-                </span>
-                <div className="text-base uppercase">
-                  {Math.floor((entry?.duration || 0) / 60)} MINUTES /{" "}
-                  {entry?.logs?.length || 0} EXERCISES
+              <div className="flex flex-col gap-3 mb-2 border-b">
+                <div className="flex gap-2">
+                  <span className="text-lg font-bold text-primary uppercase">
+                    {entry?.workout?.dayName}
+                  </span>
+                  <span>::</span>
+                  <span className="text-lg font-bold text-primary uppercase">
+                    {entry?.workout?.focus}
+                  </span>
                 </div>
-                <span className="text-base text-muted uppercase">
-                  {entry?.workout?.date
-                    ? new Date(entry.workout.date).toLocaleDateString()
-                    : ""}
-                </span>
+
+                <div className="flex justify-between">
+                  <div className="text-base uppercase">
+                    {Math.floor((entry?.duration || 0) / 60)} MINUTES /{" "}
+                    {entry?.logs?.length || 0} EXERCISES
+                  </div>
+                  <span className="text-base text-muted uppercase">
+                    {entry?.workout?.date
+                      ? new Date(entry.workout.date).toLocaleDateString()
+                      : ""}
+                  </span>
+                </div>
               </div>
 
               <div className="mt-4 flex flex-col gap-2">
