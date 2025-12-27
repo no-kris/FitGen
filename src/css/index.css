@@ -38,6 +38,19 @@ textarea {
   border: none;
 }
 
+/* Chrome, Safari, Edge, Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Firefox */
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 /* 
 * App Layout
 */
@@ -168,6 +181,12 @@ textarea {
 
 .bg-light {
   background-color: var(--bg-muted);
+  border-radius: var(--radius);
+  width: fit-content;
+}
+
+.bg-success {
+  background-color: var(--success);
   border-radius: var(--radius);
   width: fit-content;
 }

@@ -2,6 +2,7 @@ import { ArrowLeft, Weight } from "lucide-react";
 import { useEffect, useState } from "react";
 import Button from "../../components/ui/Button";
 import formatTimer from "../../utils/formatTimer";
+import WorkoutCard from "./WorkoutCard";
 
 export default function ActiveWorkout({ workout, onFinish, onClose }) {
   const [logs, setLogs] = useState(
@@ -10,7 +11,7 @@ export default function ActiveWorkout({ workout, onFinish, onClose }) {
       workout.exercises.map((e) => ({
         name: e.name,
         sets: Array.from({ length: parseInt(e.sets) }, () => ({
-          Weight: "",
+          weight: "",
           reps: "",
           completed: false,
         })),
@@ -50,6 +51,10 @@ export default function ActiveWorkout({ workout, onFinish, onClose }) {
           onClick={() => onClose()}
           className="text-lg bg-primary text-dark p-2 letter-spacing-2"
         />
+      </div>
+
+      <div className="p-4 flex flex-col gap-4">
+        <WorkoutCard workout={workout} logs={logs} setLogs={setLogs} />
       </div>
     </div>
   );

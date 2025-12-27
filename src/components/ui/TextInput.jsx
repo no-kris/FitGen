@@ -9,9 +9,11 @@ export default function TextInput({
 }) {
   return (
     <>
-      <label htmlFor={id} className="text-lg font-bold text-muted uppercase">
-        {label}
-      </label>
+      {label && (
+        <label htmlFor={id} className="text-lg font-bold text-muted uppercase">
+          {label}
+        </label>
+      )}
       <input
         type={type}
         id={id}

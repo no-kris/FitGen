@@ -99,6 +99,13 @@ html {
   display: flex;
 }
 
+.grid-cols-workout {
+  display: grid;
+  grid-template-columns: 0 0.5fr 0.5fr 3rem;
+  align-items: center;
+  gap: 1.5rem;
+}
+
 .flex-col {
   flex-direction: column;
 }
@@ -212,6 +219,11 @@ html {
   padding-top: 0.8rem;
 }
 
+.px-10 {
+  padding-left: 2.4rem;
+  padding-right: 2.4rem;
+}
+
 .py-10 {
   padding-top: 2.4rem;
   padding-bottom: 2.4rem;
@@ -245,6 +257,14 @@ html {
   max-width: 20rem;
 }
 
+.w-20 {
+  width: 5rem;
+}
+
+.w-24 {
+  width: 6rem;
+}
+
 .letter-spacing-2 {
   letter-spacing: 0.1rem;
 }
@@ -272,4 +292,12 @@ html {
 .border-b {
   border-bottom: 1px solid var(--border-color);
   padding-bottom: 0.8rem;
+}
+
+.opacity-80 {
+  opacity: 0.8;
+}
+
+.m-0 {
+  margin: 0 !important;
 }
