@@ -39,7 +39,7 @@ export default function Schedule({
                   onClick={() =>
                     onStartWorkout({
                       ...day,
-                      weekNum: currentWeek.weekNumber,
+                      weekNumber: currentWeek.weekNumber,
                     })
                   }
                   Icon={Play}

@@ -294,6 +294,10 @@ html {
   padding-bottom: 0.8rem;
 }
 
+.opacity-50 {
+  opacity: 0.5;
+}
+
 .opacity-80 {
   opacity: 0.8;
 }
