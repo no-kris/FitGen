@@ -105,7 +105,7 @@ html {
 
 .grid-cols-workout {
   display: grid;
-  grid-template-columns: 0 0.5fr 0.5fr 3rem;
+  grid-template-columns: 0 2fr 2fr 2fr;
   align-items: center;
   gap: 1.5rem;
 }
@@ -247,6 +247,10 @@ html {
 
 .text-left {
   text-align: left;
+}
+
+.text-right {
+  text-align: right;
 }
 
 .whitespace-nowrap {

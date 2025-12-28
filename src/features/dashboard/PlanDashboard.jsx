@@ -13,7 +13,7 @@ export default function PlanDashboard({
   onReplaceExercise,
 }) {
   const [weekIndex, setWeekIndex] = useState(0);
-  const [details, setDetails] = useState(null);
+  const [activeDayIndex, setActiveDayIndex] = useState(null);
   const [showCheckin, setShowCheckin] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -30,6 +30,8 @@ export default function PlanDashboard({
   }, [plan]);
 
   const currentWeek = plan.weeks[weekIndex] || plan.weeks[0];
+  const activeDayDetails =
+    activeDayIndex !== null ? currentWeek.schedule[activeDayIndex] : null;
   if (!currentWeek)
     return (
       <div className="text-center text-2xl text-muted p-6">LOADING...</div>
@@ -110,7 +112,7 @@ export default function PlanDashboard({
       <div className="flex flex-col gap-3 mt-4">
         <Schedule
           currentWeek={currentWeek}
-          setDetails={setDetails}
+          setDetails={setActiveDayIndex}
           onCompleted={handleCompleted}
           onStartWorkout={onStartWorkout}
         />
@@ -153,11 +155,11 @@ export default function PlanDashboard({
       />
 
       <DayDetailModal
-        isOpen={!!details}
-        onClose={() => setDetails(null)}
-        details={details}
+        isOpen={!!activeDayDetails}
+        onClose={() => setActiveDayIndex(null)}
+        details={activeDayDetails}
         onReplaceExercise={(exIndex, newEx) => {
-          onReplaceExercise(weekIndex, details.index, exIndex, newEx);
+          onReplaceExercise(weekIndex, activeDayIndex, exIndex, newEx);
         }}
       />
     </div>

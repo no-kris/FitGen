@@ -66,7 +66,11 @@ export default function ProfileScreen({
           <Button
             text="BUY DEV PROTEIN?"
             onClick={() =>
-              window.open("https://www.buymeacoffee.com/kristreska")
+              window.open(
+                "https://www.buymeacoffee.com/kristreska",
+                "_blank",
+                "noopener,noreferrer"
+              )
             }
             className="button btn-primary w-full mb-4 text-2xl font-bold letter-spacing-2 p-3"
           />
@@ -87,7 +91,9 @@ export default function ProfileScreen({
               text="PRIVACY POLICY"
               onClick={() =>
                 window.open(
-                  "https://docs.google.com/document/d/e/2PACX-1vQIArxvMDxCVizYEzY1IgbwGab-v29NuDK43yi6oeIvZZxDmwIBbj_68wbUIsTdFOWQSC9sUbzSrdHX/pub"
+                  "https://docs.google.com/document/d/e/2PACX-1vQIArxvMDxCVizYEzY1IgbwGab-v29NuDK43yi6oeIvZZxDmwIBbj_68wbUIsTdFOWQSC9sUbzSrdHX/pub",
+                  "_blank",
+                  "noopener,noreferrer"
                 )
               }
               className="text-primary uppercase"

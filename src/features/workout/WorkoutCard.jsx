@@ -1,8 +1,12 @@
-import { Check, Info } from "lucide-react";
+import { Check, PlusCircle, Trash } from "lucide-react";
 import TextInput from "../../components/ui/TextInput";
 import Button from "../../components/ui/Button";
+import RestTimer from "./RestTimer";
+import { useState } from "react";
 
 export default function WorkoutCard({ workout, logs, setLogs }) {
+  const [activeRestTimerIndex, setActiveRestTimerIndex] = useState(null);
+
   const toggleSet = (exerciseIndex, setIndex) => {
     const updatedLogs = [...logs];
     const updatedSets = [...updatedLogs[exerciseIndex].sets];
@@ -29,6 +33,26 @@ export default function WorkoutCard({ workout, logs, setLogs }) {
       ...updatedLogs[exerciseIndex],
       sets: updatedSets,
     };
+    setLogs(updatedLogs);
+  };
+
+  const handleAddSet = (exerciseIndex) => {
+    const updatedLogs = [...logs];
+    const updatedExercise = { ...updatedLogs[exerciseIndex] };
+    const updatedSets = [...updatedExercise.sets];
+    updatedSets.push({ weight: "", reps: "", completed: false });
+    updatedExercise.sets = updatedSets;
+    updatedLogs[exerciseIndex] = updatedExercise;
+    setLogs(updatedLogs);
+  };
+
+  const handleDeleteSet = (exerciseIndex, setIndex) => {
+    const updatedLogs = [...logs];
+    const updatedExercise = { ...updatedLogs[exerciseIndex] };
+    const updatedSets = [...updatedExercise.sets];
+    updatedSets.splice(setIndex, 1);
+    updatedExercise.sets = updatedSets;
+    updatedLogs[exerciseIndex] = updatedExercise;
     setLogs(updatedLogs);
   };
 
@@ -81,7 +105,7 @@ export default function WorkoutCard({ workout, logs, setLogs }) {
                 <TextInput
                   type="text"
                   inputMode="decimal"
-                  placeholder="LBS"
+                  placeholder="WEIGHT"
                   value={set.weight}
                   className="input text-center text-lg m-0 w-full"
                   onChange={(e) =>
@@ -96,21 +120,45 @@ export default function WorkoutCard({ workout, logs, setLogs }) {
                   className="input text-center text-lg m-0 w-full"
                   onChange={(e) => updateVal(index, j, "reps", e.target.value)}
                 />
-                <div className="flex justify-center">
+                <div className="flex justify-center gap-3">
                   <Button
-                    onClick={() => toggleSet(index, j)}
+                    onClick={() => {
+                      toggleSet(index, j);
+                      if (!set.completed) setActiveRestTimerIndex(index);
+                    }}
                     Icon={Check}
                     iconSize={16}
-                    className={`p-2 ${
+                    className={`p-3 ${
                       set.completed
-                        ? "bg-success opacity-80 p-3 text-dark"
-                        : "bg-muted p-3"
+                        ? "bg-success opacity-80 text-dark"
+                        : "bg-muted"
                     }`}
                   />
+                  {!set.completed && (
+                    <Button
+                      onClick={() => handleDeleteSet(index, j)}
+                      Icon={Trash}
+                      iconSize={16}
+                      className="p-3 bg-danger"
+                    />
+                  )}
                 </div>
               </div>
             ))}
+          <Button
+            text="ADD SET"
+            onClick={() => handleAddSet(index)}
+            Icon={PlusCircle}
+            iconSize={16}
+            className="flex justify-center items-center button btn-muted w-full font-bold text-lg p-2 mt-2 letter-spacing-2 gap-3"
+          />
         </div>
+        {activeRestTimerIndex === index && (
+          <RestTimer
+            restTime={parseInt(exercise.rest)}
+            onRestComplete={() => setActiveRestTimerIndex(null)}
+          />
+        )}
       </div>
     );
   });

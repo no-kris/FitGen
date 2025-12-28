@@ -19,7 +19,7 @@ export default function DayDetailModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="WORKOUT DETAILS">
       <div className="view-container p-2">
-        <div className="flex flex-col gap-3 justify-between border-b pb-2">
+        <div className="flex flex-col gap-3 justify-between pb-2">
           <div>
             <h1 className="text-3xl font-bold">{details.dayName}</h1>
             <span className="text-primary text-lg">{details.focus}</span>
@@ -53,7 +53,7 @@ export default function DayDetailModal({
                   </div>
                 </div>
                 {expandedIndex === index && (
-                  <div className="mt-4 pt-4 border-t border-color">
+                  <div className="mt-4 pt-4">
                     <p className="text-base text-muted uppercase letter-spacing-2 mb-4">
                       Select Alternative
                     </p>
@@ -64,7 +64,7 @@ export default function DayDetailModal({
                             text={alt}
                             Icon={RotateCcw}
                             iconSize={16}
-                            className="button text-primary text-lg w-full text-left flex items-center gap-2"
+                            className="button btn-primary text-lg letter-spacing-2 font-bold w-full flex items-center gap-1 p-2"
                             onClick={() => {
                               onReplaceExercise(index, alt);
                               setExpandedIndex(null);
@@ -81,7 +81,7 @@ export default function DayDetailModal({
           </div>
           <Button
             text={"CLOSE"}
-            className="button btn-secondary w-full font-bold text-xl uppercase"
+            className="button btn-muted p-2 w-full font-bold text-xl uppercase"
             onClick={onClose}
           />
         </div>

@@ -81,7 +81,7 @@ export default function ActiveWorkout({ workout, onFinish, onClose }) {
       <Modal
         isOpen={showConfirm}
         onClose={() => setShowConfirm(null)}
-        title="Confirm Finish"
+        title="Confirm Action"
         children={
           <div className="flex flex-col gap-2">
             <p className="text-lg font-bold">{`${

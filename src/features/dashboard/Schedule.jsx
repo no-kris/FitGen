@@ -29,10 +29,10 @@ export default function Schedule({
             {!done && (
               <>
                 <Button
-                  onClick={() => setDetails({ ...day, index: index })}
+                  onClick={() => setDetails(index)}
                   Icon={Settings}
                   iconSize={20}
-                  className="px-2 py-1 text-muted bg-light"
+                  className="px-2 py-1 btn-muted"
                   text=""
                 />
                 <Button
@@ -44,7 +44,7 @@ export default function Schedule({
                   }
                   Icon={Play}
                   iconSize={20}
-                  className="px-2 py-1 text-primary bg-light"
+                  className="px-2 py-1 btn-primary"
                   text=""
                 />
               </>
@@ -58,12 +58,13 @@ export default function Schedule({
             .map((exercise, index) => (
               <div
                 key={index}
-                className="flex items-center justify-between mb-2"
+                className="flex items-start justify-between gap-2 mb-2"
               >
-                <div className="flex items-center gap-2 text-lg">
-                  <span className="text-primary">::</span> {exercise.name}
+                <div className="flex gap-2 text-lg flex-1">
+                  <span className="text-primary text-lg">E{index + 1}</span>
+                  <span>{exercise.name}</span>
                 </div>
-                <span className="text-base letter-spacing-2 text-muted whitespace-nowrap">
+                <span className="text-base letter-spacing-2 text-muted text-right flex-1">
                   {exercise.sets}x{exercise.reps}
                 </span>
               </div>
