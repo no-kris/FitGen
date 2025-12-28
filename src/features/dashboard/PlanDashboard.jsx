@@ -32,6 +32,7 @@ export default function PlanDashboard({
   const currentWeek = plan.weeks[weekIndex] || plan.weeks[0];
   const activeDayDetails =
     activeDayIndex !== null ? currentWeek.schedule[activeDayIndex] : null;
+
   if (!currentWeek)
     return (
       <div className="text-center text-2xl text-muted p-6">LOADING...</div>

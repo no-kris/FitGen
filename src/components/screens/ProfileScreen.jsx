@@ -20,14 +20,15 @@ export default function ProfileScreen({
       ? Scale
       : Weight;
 
-  const planDescription =
-    `You have ${profile.equipment} equipment to workout with.` +
-    (profile.exclusions !== "None" && profile.exclusions.length > 0
-      ? ` You have requested to avoid ${profile.exclusions.join(", ")}.`
-      : " You have not requested any exclusions.") +
-    (profile.priorities !== "None" && profile.priorities.length > 0
-      ? ` You have requested to prioritize ${profile.priorities.join(", ")}.`
-      : " You have not requested any priorities.");
+  const planDetails = [
+    `Equipment: ${profile.equipment}`,
+    profile.exclusions !== "None"
+      ? `Exclusions: ${profile.exclusions}`
+      : "No exclusions requested",
+    profile.priorities !== "None"
+      ? `Priorities: ${profile.priorities}`
+      : "No priorities requested",
+  ];
 
   const handleReport = () => {
     const subject = encodeURIComponent("FitGen App Report");
@@ -51,9 +52,13 @@ export default function ProfileScreen({
               {profile.level} // {profile.selectedDays.length} DAYS/WEEK
             </p>
             <div className="flex flex-col text-center gap-4 mt-4">
-              <p className="text-lg font-bold text-primary uppercase letter-spacing-2 line-height-2">
-                {planDescription}
-              </p>
+              <ul className="text-lg font-bold text-primary uppercase letter-spacing-2 line-height-2 list-none">
+                {planDetails.map((detail, index) => (
+                  <li key={index} className="mb-2 text-left">
+                    {detail}
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         </div>

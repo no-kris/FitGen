@@ -10,6 +10,7 @@ import PlanDashboard from "./features/dashboard/PlanDashboard";
 import generateNextWeekPlan from "./utils/generateNextWeekPlan";
 import ActiveWorkout from "./features/workout/ActiveWorkout";
 import saveToLocalStorage from "./utils/saveToLocalStorage";
+import { authService } from "./services/firebase/authServices";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -31,7 +32,6 @@ function App() {
     if (localProfile) setProfile(JSON.parse(localProfile));
     if (localHistory) {
       const parsedHistory = JSON.parse(localHistory);
-      // Filter out any null/invalid entries to prevent crashes
       setHistory(
         Array.isArray(parsedHistory)
           ? parsedHistory.filter((h) => h && h.workout)
@@ -39,6 +39,22 @@ function App() {
       );
     }
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = authService.subscribeToAuthChanges((currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        saveToLocalStorage("fitgen-user", currentUser);
+        setIsGuest(false);
+        if (view === "welcome") setView(plan ? "plan" : "profile");
+      } else {
+        setUser(null);
+        localStorage.removeItem("fitgen-user");
+        if (!isGuest) setView("welcome");
+      }
+    });
+    return () => unsubscribe();
+  }, [plan, view, user]);
 
   const handleSavePlan = (plan, profile) => {
     setPlan(plan);
@@ -48,18 +64,40 @@ function App() {
     setView("plan");
   };
 
-  const handleSignUp = (user) => {
-    setIsGuest(false);
-    setShowAuth(false);
-    setUser(user);
-    saveToLocalStorage("fitgen-user", user);
+  const handleSignUp = async (user) => {
+    try {
+      await authService.signUp(user.email, user.password);
+      setIsGuest(false);
+      setShowAuth(false);
+    } catch (error) {
+      console.error("Signup failed", error);
+    }
   };
 
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem("fitgen-user");
-    setIsGuest(false);
-    setView("welcome");
+  const handleLogin = async (user) => {
+    try {
+      await authService.signIn(user.email, user.password);
+      setIsGuest(false);
+      setShowAuth(false);
+    } catch (error) {
+      console.error("Login failed", error);
+    }
+  };
+
+  const handleResetPassword = async (email) => {
+    try {
+      await authService.resetPassword(email);
+    } catch (error) {
+      console.error("Reset password failed", error);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
   };
 
   const handleGenerateNextWeek = async (feedback) => {
@@ -211,7 +249,12 @@ function App() {
         onClose={() => setShowAuth(false)}
         title="LOGIN OR SIGNUP"
       >
-        <AuthModal onSignUp={handleSignUp} onClose={() => setShowAuth(false)} />
+        <AuthModal
+          onSignUp={handleSignUp}
+          onLogin={handleLogin}
+          onResetPassword={handleResetPassword}
+          onClose={() => setShowAuth(false)}
+        />
       </Modal>
     </>
   );

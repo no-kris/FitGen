@@ -4,7 +4,12 @@ import TextInput from "../../components/ui/TextInput";
 import handleModeChange from "../../utils/handleModeChange";
 import { Eye, EyeOff } from "lucide-react";
 
-export default function AuthModal({ onClose, onSignUp }) {
+export default function AuthModal({
+  onClose,
+  onSignUp,
+  onLogin,
+  onResetPassword,
+}) {
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -13,20 +18,27 @@ export default function AuthModal({ onClose, onSignUp }) {
 
   const handleSubmit = () => {
     if (mode === "reset") {
-      setMessage("Reset link sent to your email");
+      if (!email) {
+        setMessage("EMAIL REQUIRED");
+        return;
+      }
+      onResetPassword(email);
+      onClose();
       return;
     }
+
     if (!email || !password) {
       setMessage("CREDENTIALS REQUIRED");
       return;
     }
+
     if (mode === "login") {
       setMessage("AUTHENTICATING...");
-    }
-    if (mode === "signup") {
+      onLogin({ email, password });
+    } else if (mode === "signup") {
       setMessage("REGISTERING...");
+      onSignUp({ email, password });
     }
-    onSignUp({ email, password });
     onClose();
   };
 

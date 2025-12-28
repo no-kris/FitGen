@@ -2,14 +2,8 @@ import callModel from "../services/api/callModel";
 
 const generateInitialPlan = async (formData) => {
   const days = formData.selectedDays.join(", ");
-  const exclusions =
-    formData.exclusions !== "None" && formData.exclusions.length > 0
-      ? formData.exclusions.join(", ")
-      : "";
-  const priorities =
-    formData.priorities !== "None" && formData.priorities.length > 0
-      ? formData.priorities.join(", ")
-      : "";
+  const exclusions = formData.exclusions ? formData.exclusions : "None";
+  const priorities = formData.priorities ? formData.priorities : "None";
 
   const getEquipmentInstruction = (equipment) => {
     switch (equipment.toLowerCase()) {
@@ -50,12 +44,8 @@ const generateInitialPlan = async (formData) => {
     - **Available Equipment:** ${getEquipmentInstruction(
       formData.equipment
     )} (Do NOT prescribe exercises using unavailable equipment)
-    - **EXCLUSIONS & INJURIES (CRITICAL):** ${
-      exclusions || "None"
-    } (You MUST filter out any exercises, distinct muscle groups, or movement patterns that conflict with these exclusions. Failure to do so is a safety violation.)
-    - **PRIORITIZE MUSCLE GROUPS:** ${
-      priorities || "Any"
-    } (You MUST focus on the user's priority muscle groups or movement patterns.)
+    - **EXCLUSIONS & INJURIES (CRITICAL):** ${exclusions} (You MUST filter out any exercises, distinct muscle groups, or movement patterns that conflict with these exclusions. Failure to do so is a safety violation.)
+    - **PRIORITIZE MUSCLE GROUPS:** ${priorities} (You MUST focus on the user's priority muscle groups or movement patterns.)
 
     **TASK:**
     Create strictly **WEEK 1** of a ${formData.weeks}-week program.
