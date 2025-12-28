@@ -15,9 +15,9 @@
   --danger: #ef4444;
   --success: #10b981;
   --radius: 4px;
-  --safe-top: env(safe-area-inset-top, 20px);
-  --safe-bottom: env(safe-area-inset-bottom, 20px);
-  --nav-height: 65px;
+  --safe-top: 3rem;
+  --safe-bottom: 4.2rem;
+  --nav-height: 6.5rem;
   --font-family-main: "Courier New", Courier, monospace;
   --font-family-secondary: "Poppins", sans-serif;
   --bg-muted: #262626;

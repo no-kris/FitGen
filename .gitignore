@@ -25,3 +25,10 @@ dist-ssr
 
 # Services
 src/services/*
+
+
+# Android build files
+android
+
+# Icons
+icons
