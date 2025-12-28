@@ -99,6 +99,10 @@ html {
   display: flex;
 }
 
+.flex-1 {
+  flex: 1;
+}
+
 .grid-cols-workout {
   display: grid;
   grid-template-columns: 0 0.5fr 0.5fr 3rem;
