@@ -3,7 +3,7 @@ import Button from "../ui/Button";
 import { ArrowDown, ArrowUp } from "lucide-react";
 
 export default function LogsScreen({ history }) {
-  const [dropdown, setDropDown] = useState(false);
+  const [expandedIndex, setExpandedIndex] = useState(null);
 
   return (
     <>
@@ -45,22 +45,22 @@ export default function LogsScreen({ history }) {
               </div>
 
               <div className="mt-4 flex flex-col gap-2">
-                {dropdown ? (
+                {expandedIndex === index ? (
                   <Button
-                    onClick={() => setDropDown(false)}
+                    onClick={() => setExpandedIndex(null)}
                     Icon={ArrowUp}
                     iconSize={16}
                   />
                 ) : (
                   <Button
-                    onClick={() => setDropDown(true)}
+                    onClick={() => setExpandedIndex(index)}
                     Icon={ArrowDown}
                     iconSize={16}
                     text="View Details"
                     className="flex flex-col items-center gap-2"
                   />
                 )}
-                {dropdown &&
+                {expandedIndex === index &&
                   entry?.logs?.map((log, index) => (
                     <div key={index} className="flex flex-col gap-1 mb-2">
                       <div className="text-lg font-bold text-primary uppercase">

@@ -77,7 +77,7 @@ const renderStep = (step, setFormData, formData) => {
           handleChange={(e) =>
             setFormData({ ...formData, duration: parseInt(e.target.value) })
           }
-          label="Duration"
+          label="Workout Duration"
           options={{ min: 15, max: 120, step: 1, unit: "min" }}
         />
       );
@@ -89,7 +89,7 @@ const renderStep = (step, setFormData, formData) => {
           handleChange={(e) =>
             setFormData({ ...formData, weeks: parseInt(e.target.value) })
           }
-          label="Weeks"
+          label="Program Weeks"
           options={{ min: 2, max: 16, step: 1, unit: "weeks" }}
         />
       );
@@ -102,7 +102,7 @@ const renderStep = (step, setFormData, formData) => {
             setFormData({ ...formData, exclusions: e.target.value })
           }
           label="Constraints"
-          placeholder="e.g. knee pain, shoulder injury"
+          placeholder="e.g. knee pain, back injury"
         />
       );
       break;
@@ -137,8 +137,8 @@ const renderStep = (step, setFormData, formData) => {
             : step === 6
             ? "WEEKS"
             : step === 7
-            ? "CONSTRAINTS"
-            : "PRIORITIES"}
+            ? "CONSTRAINTS/INJURIES (optional)"
+            : "PRIORITIES/FOCUS (optional)"}
         </h3>
         {stepContent}
       </div>
