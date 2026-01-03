@@ -3,6 +3,7 @@ import TextInput from "../../components/ui/TextInput";
 import Button from "../../components/ui/Button";
 import RestTimer from "./RestTimer";
 import { useState } from "react";
+import { Haptics } from "@capacitor/haptics";
 
 export default function WorkoutCard({ workout, logs, setLogs }) {
   const [activeRestTimerIndex, setActiveRestTimerIndex] = useState(null);
@@ -56,6 +57,14 @@ export default function WorkoutCard({ workout, logs, setLogs }) {
     setLogs(updatedLogs);
   };
 
+  const triggerHaptic = () => {
+    try {
+      Haptics.vibrate({ duration: 50 });
+    } catch (e) {
+      // Ignore errors if haptics not available
+    }
+  };
+
   return workout.exercises.map((exercise, index) => {
     return (
       <div
@@ -107,7 +116,7 @@ export default function WorkoutCard({ workout, logs, setLogs }) {
                   inputMode="decimal"
                   placeholder="WEIGHT"
                   value={set.weight}
-                  className="input text-center text-lg m-0 w-full"
+                  className="input text-center placeholder-text m-0 w-full"
                   onChange={(e) =>
                     updateVal(index, j, "weight", e.target.value)
                   }
@@ -117,7 +126,7 @@ export default function WorkoutCard({ workout, logs, setLogs }) {
                   inputMode="numeric"
                   placeholder="REPS"
                   value={set.reps}
-                  className="input text-center text-lg m-0 w-full"
+                  className="input text-center placeholder-text m-0 w-full"
                   onChange={(e) => updateVal(index, j, "reps", e.target.value)}
                 />
                 <div className="flex justify-center gap-3">
@@ -156,7 +165,10 @@ export default function WorkoutCard({ workout, logs, setLogs }) {
         {activeRestTimerIndex === index && (
           <RestTimer
             restTime={parseInt(exercise.rest)}
-            onRestComplete={() => setActiveRestTimerIndex(null)}
+            onRestComplete={() => {
+              triggerHaptic();
+              setActiveRestTimerIndex(null);
+            }}
           />
         )}
       </div>

@@ -30,5 +30,8 @@ src/services/*
 # Android build files
 android
 
+# iOS build files
+ios
+
 # Icons
 icons

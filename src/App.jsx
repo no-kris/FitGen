@@ -11,6 +11,7 @@ import generateNextWeekPlan from "./utils/generateNextWeekPlan";
 import ActiveWorkout from "./features/workout/ActiveWorkout";
 import saveToLocalStorage from "./utils/saveToLocalStorage";
 import { authService } from "./services/firebase/authServices";
+import { firestoreService } from "./services/firebase/firestoreServices";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -41,26 +42,69 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = authService.subscribeToAuthChanges((currentUser) => {
+    const unsubscribe = authService.subscribeToAuthChanges(async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
         saveToLocalStorage("fitgen-user", currentUser);
         setIsGuest(false);
+
+        // FETCH CLOUD DATA
+        try {
+          const cloudData = await firestoreService.getUserData(currentUser.uid);
+          if (cloudData) {
+            // Apply cloud data to local state
+            if (cloudData.plan) {
+              setPlan(cloudData.plan);
+              saveToLocalStorage("fitgen-plan", cloudData.plan);
+            }
+            if (cloudData.profile) {
+              setProfile(cloudData.profile);
+              saveToLocalStorage("fitgen-profile", cloudData.profile);
+            }
+            if (cloudData.history) {
+              setHistory(cloudData.history);
+              saveToLocalStorage("fitgen-history", cloudData.history);
+            }
+          } else {
+            // No cloud data? (New User or First Sync)
+            // If they have local guest data, maybe we should upload it?
+            // For now, let's just save valid local data to cloud if it exists
+            if (plan || profile) {
+                await firestoreService.saveUserData(currentUser.uid, {
+                    plan,
+                    profile,
+                    history
+                });
+            }
+          }
+        } catch (err) {
+            console.error("Sync Error:", err);
+        }
+
         if (view === "welcome") setView(plan ? "plan" : "profile");
       } else {
         setUser(null);
         localStorage.removeItem("fitgen-user");
-        if (!isGuest) setView("welcome");
+        // Clear data on logout so Guest doesn't see previous user's stuff
+        if (!isGuest) {
+            setPlan(null);
+            setProfile(null);
+            setHistory([]);
+            setView("welcome");
+        }
       }
     });
     return () => unsubscribe();
-  }, [plan, view, user]);
+  }, [isGuest]); // Removed [plan, view, user] to prevent infinite loops if we alter state inside
 
   const handleSavePlan = (plan, profile) => {
     setPlan(plan);
     setProfile(profile);
     saveToLocalStorage("fitgen-plan", plan);
     saveToLocalStorage("fitgen-profile", profile);
+    if (user) {
+        firestoreService.saveUserData(user.uid, { plan, profile });
+    }
     setView("plan");
   };
 
@@ -117,6 +161,9 @@ function App() {
       };
       setPlan(newWeekPlan);
       saveToLocalStorage("fitgen-plan", newWeekPlan);
+      if (user) {
+          firestoreService.saveUserData(user.uid, { plan: newWeekPlan });
+      }
       setView("plan");
     } catch (error) {
       console.error(error);
@@ -143,6 +190,9 @@ function App() {
 
     setPlan(newPlan);
     saveToLocalStorage("fitgen-plan", newPlan);
+    if (user) {
+        firestoreService.saveUserData(user.uid, { plan: newPlan });
+    }
   };
 
   const handleStartWorkout = (day) => {
@@ -167,12 +217,22 @@ function App() {
     const updatedHistory = [...history, updatedLog];
     setHistory(updatedHistory);
     saveToLocalStorage("fitgen-history", updatedHistory);
+    if (user) {
+        firestoreService.saveUserData(user.uid, { history: updatedHistory });
+    }
     localStorage.removeItem("fitgen-active");
     setActiveWorkout(null);
     setView("logs");
   };
 
-  const handleResetSystem = () => {
+  const handleResetSystem = async () => {
+    if (user) {
+      try {
+        await firestoreService.clearUserData(user.uid);
+      } catch (error) {
+        console.error("Error clearing user data:", error);
+      }
+    }
     setPlan(null);
     setProfile(null);
     setHistory([]);

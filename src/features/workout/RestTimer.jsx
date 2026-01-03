@@ -1,68 +1,59 @@
-import { ArrowRightCircle, Clock, PlusCircle, Trash } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowRightCircle, Clock, PlusCircle } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
 import formatTimer from "../../utils/formatTimer";
 import Button from "../../components/ui/Button";
 
 export default function RestTimer({ restTime, onRestComplete }) {
   const [timeLeft, setTimeLeft] = useState(restTime);
+  const endTimeRef = useRef(Date.now() + restTime * 1000);
 
   useEffect(() => {
-    if (timeLeft <= 0) {
-      onRestComplete();
-    }
-  }, [timeLeft, onRestComplete]);
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const difference = endTimeRef.current - now;
+      const secondsRemaining = Math.max(0, Math.ceil(difference / 1000));
 
-  const triggerHaptic = () => {
-    if (typeof navigator !== "undefined" && navigator.vibrate) {
-      navigator.vibrate(50);
-    }
+      setTimeLeft(secondsRemaining);
+
+      if (secondsRemaining <= 0) {
+        clearInterval(interval);
+        onRestComplete();
+      }
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [onRestComplete]);
+
+  const addTime = () => {
+    endTimeRef.current += 30000;
+    setTimeLeft(
+      Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000))
+    );
   };
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft((prevTime) => prevTime - 1);
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
 
   return (
     <div className="rest-timer-overlay">
-      <div className="flex justify-center gap-4 items-center">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Clock
-              size={24}
-              className="text-primary animate-spin"
-              style={{ animationDuration: "3s" }}
-            />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-lg text-muted font-bold uppercase tracking-wider">
-              Resting
-            </span>
-            <span className="text-2xl font-bold text-white">
-              {formatTimer(timeLeft)}
-            </span>
-          </div>
-        </div>
-        <div className="flex gap-4 justify-center items-center">
-          <Button
-            onClick={() => {
-              triggerHaptic();
-              setTimeLeft((t) => t + 30);
-            }}
-            text="+30s"
-            Icon={PlusCircle}
-            iconSize={14}
-            className="button btn-primary p-2 flex align-center justify-center gap-1"
-          />
+      <div className="flex flex-col justify-center items-center w-full max-w-md animate-enter">
+        <Clock size={48} className="animate-spin mb-2 text-primary" />
+        <span className="timer-label">Resting</span>
+
+        <div className="timer-hero">{formatTimer(timeLeft)}</div>
+
+        <div className="flex flex-col gap-4 w-full px-8">
           <Button
             onClick={() => onRestComplete()}
-            text="SKIP"
+            text="Skip Rest"
             Icon={ArrowRightCircle}
-            iconSize={14}
-            className="button btn-muted p-2 flex align-center justify-center gap-1"
+            iconSize={20}
+            className="btn-primary w-full p-4 text-lg font-bold flex justify-center items-center gap-2"
+          />
+
+          <Button
+            onClick={addTime}
+            text="+30 Seconds"
+            Icon={PlusCircle}
+            iconSize={20}
+            className="btn-secondary w-full p-4 text-lg font-medium flex justify-center items-center gap-2"
           />
         </div>
       </div>

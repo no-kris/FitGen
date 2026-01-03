@@ -116,13 +116,38 @@ input[type="number"] {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 1000;
-  background-color: rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(0.5rem);
+  z-index: 2000;
+  background-color: rgba(5, 5, 5, 0.7);
+  backdrop-filter: blur(15px);
   display: flex;
   justify-content: center;
   align-items: center;
   padding: 2rem;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.timer-hero {
+  font-size: 8rem;
+  font-weight: 200;
+  line-height: 1;
+  color: var(--primary);
+  letter-spacing: -4px;
+  margin-bottom: 3rem;
+  margin-top: 1rem;
+}
+
+@media (max-width: 600px) {
+  .timer-hero {
+    font-size: 5rem;
+  }
+}
+
+.timer-label {
+  font-size: 3rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5rem;
+  color: var(--text-muted);
+  font-weight: 600;
 }
 
 /* 
@@ -135,9 +160,16 @@ input[type="number"] {
 }
 
 .btn-secondary {
-  background-color: var(--bg-card);
-  color: var(--text-muted);
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--text-main);
   border-radius: var(--radius);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .btn-muted {
@@ -249,6 +281,8 @@ input[type="number"] {
   padding: 2rem;
   width: 100%;
   max-width: 400px;
+  max-height: 60vh;
+  overflow-y: auto;
 }
 
 /* 
@@ -261,6 +295,12 @@ input[type="number"] {
   padding: 1.5rem 1rem;
   margin-top: 0.5rem;
   outline: var(--primary) solid 1px;
+  font-size: 1.6rem;
+}
+
+.placeholder-text {
+  font-size: 0.9rem !important;
+  opacity: 0.7;
 }
 
 .input:not(:last-child) {
@@ -291,4 +331,9 @@ input[type="number"] {
   align-items: center;
   background-color: var(--bg-card);
   border-top: 1px solid var(--border-color);
+}
+
+.scrollable-list {
+  max-height: 200px;
+  overflow-y: auto;
 }
