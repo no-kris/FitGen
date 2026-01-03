@@ -57,7 +57,7 @@ export default function DayDetailModal({
                     <p className="text-base text-muted uppercase letter-spacing-2 mb-4">
                       Select Alternative
                     </p>
-                    <div className="flex flex-col gap-5">
+                    <div className="flex flex-col gap-5 scrollable-list pr-2">
                       {exercise.alternatives.map((alt, altIndex) => (
                         <div key={altIndex}>
                           <Button
