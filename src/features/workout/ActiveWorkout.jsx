@@ -1,5 +1,5 @@
-import { ArrowLeft, Weight } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowLeft } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import Button from "../../components/ui/Button";
 import formatTimer from "../../utils/formatTimer";
 import WorkoutCard from "./WorkoutCard";
@@ -20,9 +20,14 @@ export default function ActiveWorkout({ workout, onFinish, onClose }) {
   );
   const [timer, setTimer] = useState(workout.elapsed || 0);
   const [showConfirm, setShowConfirm] = useState(null);
+  const startTimeRef = useRef(Date.now() - timer * 1000);
 
   useEffect(() => {
-    const interval = setInterval(() => setTimer((t) => t + 1), 1000);
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const elapsedSeconds = Math.floor((now - startTimeRef.current) / 1000);
+      setTimer(elapsedSeconds);
+    }, 100);
     return () => clearInterval(interval);
   }, []);
 
@@ -79,48 +84,47 @@ export default function ActiveWorkout({ workout, onFinish, onClose }) {
       </div>
 
       <Modal
-        isOpen={showConfirm}
+        isOpen={!!showConfirm}
         onClose={() => setShowConfirm(null)}
         title="Confirm Action"
-        children={
-          <div className="flex flex-col gap-2">
-            <p className="text-lg font-bold">{`${
-              showConfirm === "exit" ? "Save progress?" : "Finished workout?"
-            }`}</p>
-            <div className="flex justify-center w-full gap-2">
+      >
+        <div className="flex flex-col gap-2">
+          <p className="text-lg font-bold">
+            {showConfirm === "exit" ? "Save progress?" : "Finished workout?"}
+          </p>
+          <div className="flex justify-center w-full gap-2">
+            <Button
+              text="Cancel"
+              onClick={() => setShowConfirm(null)}
+              className="button btn-muted w-full font-bold text-lg uppercase p-4 letter-spacing-2"
+            />
+            <Button
+              text={showConfirm === "exit" ? "Save" : "Finish"}
+              onClick={
+                showConfirm === "exit"
+                  ? () => handleSaveProgress()
+                  : () =>
+                      onFinish({
+                        workout,
+                        logs,
+                        duration: timer,
+                      })
+              }
+              className="button btn-primary w-full font-bold text-lg uppercase p-4 letter-spacing-2"
+            />
+            {showConfirm === "exit" && (
               <Button
-                text="Cancel"
-                onClick={() => setShowConfirm(null)}
-                className="button btn-muted w-full font-bold text-lg uppercase p-4 letter-spacing-2"
+                text="Discard"
+                onClick={() => {
+                  localStorage.removeItem("fitgen-active");
+                  onClose();
+                }}
+                className="button btn-danger w-full font-bold text-lg uppercase p-4 letter-spacing-2"
               />
-              <Button
-                text={showConfirm === "exit" ? "Save" : "Finish"}
-                onClick={
-                  showConfirm === "exit"
-                    ? () => handleSaveProgress()
-                    : () =>
-                        onFinish({
-                          workout,
-                          logs,
-                          duration: timer,
-                        })
-                }
-                className="button btn-primary w-full font-bold text-lg uppercase p-4 letter-spacing-2"
-              />
-              {showConfirm === "exit" && (
-                <Button
-                  text="Discard"
-                  onClick={() => {
-                    localStorage.removeItem("fitgen-active");
-                    onClose();
-                  }}
-                  className="button btn-danger w-full font-bold text-lg uppercase p-4 letter-spacing-2"
-                />
-              )}
-            </div>
+            )}
           </div>
-        }
-      />
+        </div>
+      </Modal>
     </>
   );
 }
