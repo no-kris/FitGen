@@ -2,12 +2,14 @@ import { ArrowRightCircle, Clock, PlusCircle } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import formatTimer from "../../utils/formatTimer";
 import Button from "../../components/ui/Button";
+import { KeepAwake } from "@capacitor-community/keep-awake";
 
 export default function RestTimer({ restTime, onRestComplete }) {
   const [timeLeft, setTimeLeft] = useState(restTime);
   const endTimeRef = useRef(Date.now() + restTime * 1000);
 
   useEffect(() => {
+    KeepAwake.keepAwake();
     const interval = setInterval(() => {
       const now = Date.now();
       const difference = endTimeRef.current - now;
@@ -21,7 +23,10 @@ export default function RestTimer({ restTime, onRestComplete }) {
       }
     }, 100);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval); 
+      KeepAwake.allowSleep();
+    };
   }, [onRestComplete]);
 
   const addTime = () => {

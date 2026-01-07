@@ -1,5 +1,5 @@
 import { ArrowLeft, Weight } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Button from "../../components/ui/Button";
 import formatTimer from "../../utils/formatTimer";
 import WorkoutCard from "./WorkoutCard";
@@ -20,9 +20,14 @@ export default function ActiveWorkout({ workout, onFinish, onClose }) {
   );
   const [timer, setTimer] = useState(workout.elapsed || 0);
   const [showConfirm, setShowConfirm] = useState(null);
+  const startTimeRef = useRef(Date.now() - timer * 1000);
 
   useEffect(() => {
-    const interval = setInterval(() => setTimer((t) => t + 1), 1000);
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const elapsedtime = Math.floor((now - startTimeRef.current) / 1000);
+      setTimer(elapsedtime);
+    }, 1000);
     return () => clearInterval(interval);
   }, []);
 

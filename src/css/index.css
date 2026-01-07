@@ -298,7 +298,7 @@ input[type="number"] {
   font-size: 1.6rem;
 }
 
-.placeholder-text {
+.placeholder-text::placeholder {
   font-size: 0.9rem !important;
   opacity: 0.7;
 }

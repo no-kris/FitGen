@@ -64,7 +64,7 @@ export default function DayDetailModal({
                             text={alt}
                             Icon={RotateCcw}
                             iconSize={16}
-                            className="button btn-primary text-lg letter-spacing-2 font-bold w-full flex items-center gap-1 p-2"
+                            className="button btn-primary text-lg letter-spacing-2 font-bold w-full flex items-start gap-1 p-2"
                             onClick={() => {
                               onReplaceExercise(index, alt);
                               setExpandedIndex(null);

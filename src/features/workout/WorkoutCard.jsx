@@ -59,7 +59,7 @@ export default function WorkoutCard({ workout, logs, setLogs }) {
 
   const triggerHaptic = () => {
     try {
-      Haptics.vibrate({ duration: 50 });
+      Haptics.vibrate({ duration: 1000 });
     } catch (e) {
       // Ignore errors if haptics not available
     }
