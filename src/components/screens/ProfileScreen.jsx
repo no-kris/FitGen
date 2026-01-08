@@ -3,16 +3,15 @@ import { Dumbbell, Settings, LogOut, Scale, Weight } from "lucide-react";
 import Button from "../ui/Button";
 import Modal from "../ui/Modal";
 import TextInput from "../ui/TextInput";
-import DonationModal from "../../features/iap/DonationModal";
 
 export default function ProfileScreen({
   profile,
   onResetSystem,
   isGuest,
-  handleLogout,
+  onLogout,
+  onDeleteAccount,
 }) {
-  const [activeModal, setActiveModal] = useState(null); // 'reset' | 'report' | null
-  const [showDonationModal, setShowDonationModal] = useState(false);
+  const [activeModal, setActiveModal] = useState(null); // 'reset' | 'report' | 'delete-account' | null
   const [reportReason, setReportReason] = useState("");
 
   const Icon =
@@ -64,54 +63,79 @@ export default function ProfileScreen({
             </div>
           </div>
         </div>
-        <div className="flex flex-col justify-between h-full">
+      </div>
+      <div className="flex flex-col h-full">
+        <div>
           <Button
             text="RESET SYSTEM"
             onClick={() => setActiveModal("reset")}
             className="button btn-danger w-full mb-4 text-2xl font-bold letter-spacing-2 p-3"
           />
-          <Button
-            text="SUPPORT THE DEV?"
-            onClick={() => setShowDonationModal(true)}
-            className="button btn-primary w-full mb-4 text-2xl font-bold letter-spacing-2 p-3"
-          />
           {!isGuest && (
             <Button
               text="LOGOUT"
               onClick={() => {
-                handleLogout();
+                onLogout();
               }}
               icon={LogOut}
               iconSize={20}
               className="button btn-secondary w-full mb-4 text-2xl font-bold letter-spacing-2 p-3"
             />
           )}
+        </div>
 
-          <div className="flex justify-between pb-4">
+        <div className="flex justify-between pb-4">
+          <Button
+            text="PRIVACY POLICY"
+            onClick={() =>
+              window.open(
+                "https://docs.google.com/document/d/e/2PACX-1vQIArxvMDxCVizYEzY1IgbwGab-v29NuDK43yi6oeIvZZxDmwIBbj_68wbUIsTdFOWQSC9sUbzSrdHX/pub",
+                "_blank",
+                "noopener,noreferrer"
+              )
+            }
+            className="text-success uppercase"
+          />
+          {!isGuest && (
             <Button
-              text="PRIVACY POLICY"
-              onClick={() =>
-                window.open(
-                  "https://docs.google.com/document/d/e/2PACX-1vQIArxvMDxCVizYEzY1IgbwGab-v29NuDK43yi6oeIvZZxDmwIBbj_68wbUIsTdFOWQSC9sUbzSrdHX/pub",
-                  "_blank",
-                  "noopener,noreferrer"
-                )
-              }
-              className="text-primary uppercase"
-            />
-            <Button
-              text="File REPORT"
-              onClick={() => setActiveModal("report")}
+              text="DELETE ACCOUNT"
+              onClick={() => setActiveModal("delete-account")}
               className="text-error uppercase"
             />
-          </div>
+          )}
+          <Button
+            text="File REPORT"
+            onClick={() => setActiveModal("report")}
+            className="text-primary uppercase"
+          />
         </div>
       </div>
 
-      <DonationModal
-        isOpen={showDonationModal}
-        onClose={() => setShowDonationModal(false)}
-      />
+      <Modal
+        isOpen={activeModal === "delete-account"}
+        onClose={() => setActiveModal(null)}
+        title="Delete Account?"
+      >
+        <div className="flex flex-col gap-2">
+          <p className="text-lg mb-2">
+            Are you sure you want to delete your account? Once you delete your
+            account your data will be erased and you will not be able to get it
+            back.
+          </p>
+          <div className="flex justify-center w-full gap-2">
+            <Button
+              text="Cancel"
+              onClick={() => setActiveModal(null)}
+              className="button btn-muted w-full font-bold text-lg uppercase p-4 letter-spacing-2"
+            />
+            <Button
+              text="I'm Sure"
+              onClick={() => onDeleteAccount()}
+              className="button btn-danger w-full font-bold text-lg uppercase p-4 letter-spacing-2"
+            />
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         isOpen={activeModal === "reset"}

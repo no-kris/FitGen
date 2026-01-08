@@ -99,7 +99,7 @@ function App() {
       }
     );
     return () => unsubscribe();
-  }, [isGuest]); // Removed [plan, view, user] to prevent infinite loops if we alter state inside
+  }, [isGuest]);
 
   const handleSavePlan = (plan, profile) => {
     setPlan(plan);
@@ -110,6 +110,16 @@ function App() {
       firestoreService.saveUserData(user.uid, { plan, profile });
     }
     setView("plan");
+  };
+
+  const clearStorage = () => {
+    setPlan(null);
+    setProfile(null);
+    setHistory([]);
+    localStorage.removeItem("fitgen-plan");
+    localStorage.removeItem("fitgen-profile");
+    localStorage.removeItem("fitgen-history");
+    localStorage.removeItem("fitgen-active");
   };
 
   const handleSignUp = async (user) => {
@@ -145,6 +155,24 @@ function App() {
       await authService.logout();
     } catch (error) {
       console.error("Logout failed", error);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      await firestoreService.clearUserData(user.uid);
+      await authService.deleteAccount();
+      clearStorage();
+      alert("Your account has been successfully deleted.");
+    } catch (error) {
+      console.log("Failed to delete the user", error);
+      if (error.code === "auth/requires-recent-login") {
+        alert(
+          "For security reasons, please log out and log back in before deleting your account."
+        );
+      } else {
+        alert("Failed to delete account completely. Please try again.");
+      }
     }
   };
 
@@ -237,13 +265,7 @@ function App() {
         console.error("Error clearing user data:", error);
       }
     }
-    setPlan(null);
-    setProfile(null);
-    setHistory([]);
-    localStorage.removeItem("fitgen-plan");
-    localStorage.removeItem("fitgen-profile");
-    localStorage.removeItem("fitgen-history");
-    localStorage.removeItem("fitgen-active");
+    clearStorage();
     setView("profile");
   };
 
@@ -286,7 +308,8 @@ function App() {
                     profile={profile}
                     onResetSystem={handleResetSystem}
                     isGuest={isGuest}
-                    handleLogout={isGuest ? null : handleLogout}
+                    onLogout={isGuest ? null : handleLogout}
+                    onDeleteAccount={isGuest ? null : handleDeleteAccount}
                   />
                 ) : (
                   <ProfileSetupForm onSavePlan={handleSavePlan} />
