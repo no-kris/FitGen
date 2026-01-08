@@ -12,6 +12,7 @@ import ActiveWorkout from "./features/workout/ActiveWorkout";
 import saveToLocalStorage from "./utils/saveToLocalStorage";
 import { authService } from "./services/firebase/authServices";
 import { firestoreService } from "./services/firebase/firestoreServices";
+import sendWelcomeMessage from "./services/api/emailService";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -125,6 +126,8 @@ function App() {
   const handleSignUp = async (user) => {
     try {
       await authService.signUp(user.email, user.password);
+      sendWelcomeMessage(user.email);
+      alert("Account successfully created! Welcome email sent.");
       setIsGuest(false);
       setShowAuth(false);
     } catch (error) {
