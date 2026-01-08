@@ -3,6 +3,7 @@ import { Dumbbell, Settings, LogOut, Scale, Weight } from "lucide-react";
 import Button from "../ui/Button";
 import Modal from "../ui/Modal";
 import TextInput from "../ui/TextInput";
+import DonationModal from "../../features/iap/DonationModal";
 
 export default function ProfileScreen({
   profile,
@@ -11,6 +12,7 @@ export default function ProfileScreen({
   handleLogout,
 }) {
   const [activeModal, setActiveModal] = useState(null); // 'reset' | 'report' | null
+  const [showDonationModal, setShowDonationModal] = useState(false);
   const [reportReason, setReportReason] = useState("");
 
   const Icon =
@@ -69,14 +71,8 @@ export default function ProfileScreen({
             className="button btn-danger w-full mb-4 text-2xl font-bold letter-spacing-2 p-3"
           />
           <Button
-            text="BUY DEV PROTEIN?"
-            onClick={() =>
-              window.open(
-                "https://www.buymeacoffee.com/kristreska",
-                "_blank",
-                "noopener,noreferrer"
-              )
-            }
+            text="SUPPORT THE DEV?"
+            onClick={() => setShowDonationModal(true)}
             className="button btn-primary w-full mb-4 text-2xl font-bold letter-spacing-2 p-3"
           />
           {!isGuest && (
@@ -111,6 +107,11 @@ export default function ProfileScreen({
           </div>
         </div>
       </div>
+
+      <DonationModal
+        isOpen={showDonationModal}
+        onClose={() => setShowDonationModal(false)}
+      />
 
       <Modal
         isOpen={activeModal === "reset"}
