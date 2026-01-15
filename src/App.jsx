@@ -95,6 +95,16 @@ function App() {
     return () => unsubscribe();
   }, [isGuest]);
 
+  const clearLocalData = () => {
+    setPlan(null);
+    setProfile(null);
+    setHistory([]);
+    localStorage.removeItem("fitgen-plan");
+    localStorage.removeItem("fitgen-profile");
+    localStorage.removeItem("fitgen-history");
+    localStorage.removeItem("fitgen-active");
+  };
+
   const handleSavePlan = (plan, profile) => {
     setPlan(plan);
     setProfile(profile);
@@ -139,6 +149,24 @@ function App() {
       await authService.logout();
     } catch (error) {
       console.error("Logout failed", error);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      clearStorage();
+      await firestoreService.clearUserData(user.uid);
+      await authService.deleteAccount();
+      alert("Your account has been successfully deleted.");
+    } catch (error) {
+      console.log("Failed to delete the user", error);
+      if (error.code === "auth/requires-recent-login") {
+        alert(
+          "For security reasons, please log out and log back in before deleting your account."
+        );
+      } else {
+        alert("Failed to delete account completely. Please try again.");
+      }
     }
   };
 
@@ -231,13 +259,7 @@ function App() {
         console.error("Failed to clear cloud data", error);
       }
     }
-    setPlan(null);
-    setProfile(null);
-    setHistory([]);
-    localStorage.removeItem("fitgen-plan");
-    localStorage.removeItem("fitgen-profile");
-    localStorage.removeItem("fitgen-history");
-    localStorage.removeItem("fitgen-active");
+    clearLocalData();
     setView("profile");
   };
 
@@ -280,7 +302,8 @@ function App() {
                     profile={profile}
                     onResetSystem={handleResetSystem}
                     isGuest={isGuest}
-                    handleLogout={isGuest ? null : handleLogout}
+                    onLogout={isGuest ? null : handleLogout}
+                    onDeleteAccount={isGuest ? null : handleDeleteAccount}
                   />
                 ) : (
                   <ProfileSetupForm onSavePlan={handleSavePlan} />

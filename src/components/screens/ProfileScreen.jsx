@@ -8,7 +8,8 @@ export default function ProfileScreen({
   profile,
   onResetSystem,
   isGuest,
-  handleLogout,
+  onLogout,
+  onDeleteAccount,
 }) {
   const [activeModal, setActiveModal] = useState(null); // 'reset' | 'report' | null
   const [reportReason, setReportReason] = useState("");
@@ -83,7 +84,7 @@ export default function ProfileScreen({
             <Button
               text="LOGOUT"
               onClick={() => {
-                handleLogout();
+                onLogout();
               }}
               icon={LogOut}
               iconSize={20}
@@ -101,16 +102,48 @@ export default function ProfileScreen({
                   "noopener,noreferrer"
                 )
               }
-              className="text-primary uppercase"
+              className="text-success uppercase"
             />
+            {!isGuest && (
+              <Button
+                text="Delete Account"
+                onClick={() => setActiveModal("delete-account")}
+                className="text-error uppercase"
+              />
+            )}
             <Button
               text="File REPORT"
               onClick={() => setActiveModal("report")}
-              className="text-error uppercase"
+              className="text-primary uppercase"
             />
           </div>
         </div>
       </div>
+
+      <Modal
+        isOpen={activeModal === "delete-account"}
+        onClose={() => setActiveModal(null)}
+        title="Delete Account"
+      >
+        <div className="flex flex-col gap-2">
+          <p className="text-lg">
+            Are you sure you want to delete your account? Once you delete your
+            account all your data will be erased.
+          </p>
+          <div className="flex justify-center w-full gap-2">
+            <Button
+              text="Cancel"
+              onClick={() => setActiveModal(null)}
+              className="button btn-muted w-full font-bold text-lg uppercase p-4 letter-spacing-2"
+            />
+            <Button
+              text="I'm Sure"
+              onClick={() => onDeleteAccount()}
+              className="button btn-danger w-full font-bold text-lg uppercase p-4 letter-spacing-2"
+            />
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         isOpen={activeModal === "reset"}
