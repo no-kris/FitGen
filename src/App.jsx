@@ -28,17 +28,20 @@ function App() {
     const localPlan = localStorage.getItem("fitgen-plan");
     const localProfile = localStorage.getItem("fitgen-profile");
     const localHistory = localStorage.getItem("fitgen-history");
-    if (localUser) setUser(JSON.parse(localUser));
-    if (localPlan) setPlan(JSON.parse(localPlan));
-    if (localProfile) setProfile(JSON.parse(localProfile));
-    if (localHistory) {
-      const parsedHistory = JSON.parse(localHistory);
-      setHistory(
-        Array.isArray(parsedHistory)
-          ? parsedHistory.filter((h) => h && h.workout)
-          : []
-      );
+    function loadUser() {
+      if (localUser) setUser(JSON.parse(localUser));
+      if (localPlan) setPlan(JSON.parse(localPlan));
+      if (localProfile) setProfile(JSON.parse(localProfile));
+      if (localHistory) {
+        const parsedHistory = JSON.parse(localHistory);
+        setHistory(
+          Array.isArray(parsedHistory)
+            ? parsedHistory.filter((h) => h && h.workout)
+            : []
+        );
+      }
     }
+    loadUser();
   }, []);
 
   useEffect(() => {
@@ -77,6 +80,7 @@ function App() {
               }
             }
           } catch (error) {
+            console.log("Failed to retrieve account", error);
             window.alert("Unable to find your data.");
           }
           if (view === "welcome") setView(plan ? "plan" : "profile");
@@ -93,7 +97,7 @@ function App() {
       }
     );
     return () => unsubscribe();
-  }, [isGuest]);
+  }, [isGuest, history, plan, profile, view]);
 
   const clearLocalData = () => {
     setPlan(null);
@@ -154,7 +158,7 @@ function App() {
 
   const handleDeleteAccount = async () => {
     try {
-      clearStorage();
+      clearLocalData();
       await firestoreService.clearUserData(user.uid);
       await authService.deleteAccount();
       alert("Your account has been successfully deleted.");
