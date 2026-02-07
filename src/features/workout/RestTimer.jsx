@@ -6,6 +6,8 @@ import { KeepAwake } from "@capacitor-community/keep-awake";
 
 export default function RestTimer({ restTime, onRestComplete }) {
   const [timeLeft, setTimeLeft] = useState(restTime);
+  //  `useRef` discards the value on subsequent renders.
+  // eslint-disable-next-line
   const endTimeRef = useRef(Date.now() + restTime * 1000);
 
   useEffect(() => {
@@ -24,7 +26,7 @@ export default function RestTimer({ restTime, onRestComplete }) {
     }, 100);
 
     return () => {
-      clearInterval(interval); 
+      clearInterval(interval);
       KeepAwake.allowSleep();
     };
   }, [onRestComplete]);

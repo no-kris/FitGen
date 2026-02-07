@@ -20,6 +20,8 @@ export default function ActiveWorkout({ workout, onFinish, onClose }) {
   );
   const [timer, setTimer] = useState(workout.elapsed || 0);
   const [showConfirm, setShowConfirm] = useState(null);
+  //  `useRef` discards the value on subsequent renders.
+  // eslint-disable-next-line
   const startTimeRef = useRef(Date.now() - timer * 1000);
 
   useEffect(() => {

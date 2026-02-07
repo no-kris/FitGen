@@ -29,17 +29,20 @@ function App() {
     const localPlan = localStorage.getItem("fitgen-plan");
     const localProfile = localStorage.getItem("fitgen-profile");
     const localHistory = localStorage.getItem("fitgen-history");
-    if (localUser) setUser(JSON.parse(localUser));
-    if (localPlan) setPlan(JSON.parse(localPlan));
-    if (localProfile) setProfile(JSON.parse(localProfile));
-    if (localHistory) {
-      const parsedHistory = JSON.parse(localHistory);
-      setHistory(
-        Array.isArray(parsedHistory)
-          ? parsedHistory.filter((h) => h && h.workout)
-          : []
-      );
+    function loadUser() {
+      if (localUser) setUser(JSON.parse(localUser));
+      if (localPlan) setPlan(JSON.parse(localPlan));
+      if (localProfile) setProfile(JSON.parse(localProfile));
+      if (localHistory) {
+        const parsedHistory = JSON.parse(localHistory);
+        setHistory(
+          Array.isArray(parsedHistory)
+            ? parsedHistory.filter((h) => h && h.workout)
+            : []
+        );
+      }
     }
+    loadUser();
   }, []);
 
   useEffect(() => {
@@ -89,18 +92,22 @@ function App() {
         } else {
           setUser(null);
           localStorage.removeItem("fitgen-user");
-          // Clear data on logout so Guest doesn't see previous user's stuff
-          if (!isGuest) {
-            setPlan(null);
-            setProfile(null);
-            setHistory([]);
-            setView("welcome");
-          }
+          // On logout we can safely clear state without dependency issues
+          setIsGuest((prevIsGuest) => {
+            if (!prevIsGuest) {
+              setPlan(null);
+              setProfile(null);
+              setHistory([]);
+              setView("welcome");
+            }
+            return prevIsGuest;
+          });
         }
       }
     );
     return () => unsubscribe();
-  }, [isGuest]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSavePlan = (plan, profile) => {
     setPlan(plan);
