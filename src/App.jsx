@@ -170,9 +170,9 @@ function App() {
 
   const handleDeleteAccount = async () => {
     try {
+      clearStorage();
       await firestoreService.clearUserData(user.uid);
       await authService.deleteAccount();
-      clearStorage();
       alert("Your account has been successfully deleted.");
     } catch (error) {
       console.log("Failed to delete the user", error);
