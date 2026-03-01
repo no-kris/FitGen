@@ -3,13 +3,12 @@ import Button from "../../components/ui/Button";
 import TextInput from "../../components/ui/TextInput";
 import handleModeChange from "../../utils/handleModeChange";
 import { Eye, EyeOff } from "lucide-react";
+import { useAuth } from "../../hooks/useAuth";
 
-export default function AuthModal({
-  onClose,
-  onSignUp,
-  onLogin,
-  onResetPassword,
-}) {
+export default function AuthModal({ onClose }) {
+  const { handleSignUp, handleLogin, handleResetPassword } = useAuth({
+    setShowAuth: onClose,
+  });
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,7 +21,7 @@ export default function AuthModal({
         setMessage("EMAIL REQUIRED");
         return;
       }
-      onResetPassword(email);
+      handleResetPassword(email);
       onClose();
       return;
     }
@@ -34,10 +33,10 @@ export default function AuthModal({
 
     if (mode === "login") {
       setMessage("AUTHENTICATING...");
-      onLogin({ email, password });
+      handleLogin({ email, password });
     } else if (mode === "signup") {
       setMessage("REGISTERING...");
-      onSignUp({ email, password });
+      handleSignUp({ email, password });
     }
     onClose();
   };

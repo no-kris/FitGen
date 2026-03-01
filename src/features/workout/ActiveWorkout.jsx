@@ -4,8 +4,25 @@ import Button from "../../components/ui/Button";
 import formatTimer from "../../utils/formatTimer";
 import WorkoutCard from "./WorkoutCard";
 import Modal from "../../components/ui/Modal";
+import { useWorkout } from "../../hooks/useWorkout";
 
-export default function ActiveWorkout({ workout, onFinish, onClose }) {
+export default function ActiveWorkout({
+  workout,
+  onClose,
+  user,
+  userData,
+  setUserData,
+  setView,
+  setActiveWorkout,
+}) {
+  const { handleFinishWorkout } = useWorkout({
+    user,
+    userData,
+    setUserData,
+    setView,
+    setActiveWorkout,
+  });
+
   const [logs, setLogs] = useState(
     () =>
       workout.logs ||
@@ -106,7 +123,7 @@ export default function ActiveWorkout({ workout, onFinish, onClose }) {
                   showConfirm === "exit"
                     ? () => handleSaveProgress()
                     : () =>
-                        onFinish({
+                        handleFinishWorkout({
                           workout,
                           logs,
                           duration: timer,

@@ -4,14 +4,25 @@ import Schedule from "./Schedule";
 import { CheckCircle2, Notebook, PlusCircle } from "lucide-react";
 import FeedbackModal from "../workout/FeedbackModal";
 import DayDetailModal from "../workout/DayDetailModal";
+import { useWorkout } from "../../hooks/useWorkout";
 
 export default function PlanDashboard({
-  plan,
-  history,
-  onStartWorkout,
-  onGenerateNextWeek,
-  onReplaceExercise,
+  user,
+  userData,
+  setUserData,
+  setView,
+  setActiveWorkout,
 }) {
+  const { plan, history } = userData;
+  const { handleGenerateNextWeek, handleReplaceExercise, handleStartWorkout } =
+    useWorkout({
+      user,
+      userData,
+      setUserData,
+      setView,
+      setActiveWorkout,
+    });
+
   const [weekIndex, setWeekIndex] = useState(0);
   const [activeDayIndex, setActiveDayIndex] = useState(null);
   const [showCheckin, setShowCheckin] = useState(false);
@@ -60,7 +71,7 @@ export default function PlanDashboard({
   const handleCheckin = async (feedback) => {
     setIsLoading(true);
     try {
-      await onGenerateNextWeek(feedback);
+      await handleGenerateNextWeek(feedback);
       setShowCheckin(false);
     } catch (error) {
       setError(error);
@@ -117,7 +128,7 @@ export default function PlanDashboard({
           currentWeek={currentWeek}
           setDetails={setActiveDayIndex}
           onCompleted={handleCompleted}
-          onStartWorkout={onStartWorkout}
+          onStartWorkout={handleStartWorkout}
         />
       </div>
 
@@ -162,7 +173,7 @@ export default function PlanDashboard({
         onClose={() => setActiveDayIndex(null)}
         details={activeDayDetails}
         onReplaceExercise={(exIndex, newEx) => {
-          onReplaceExercise(weekIndex, activeDayIndex, exIndex, newEx);
+          handleReplaceExercise(weekIndex, activeDayIndex, exIndex, newEx);
         }}
       />
     </div>

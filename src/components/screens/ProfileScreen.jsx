@@ -3,14 +3,16 @@ import { Dumbbell, Settings, LogOut, Scale, Weight } from "lucide-react";
 import Button from "../ui/Button";
 import Modal from "../ui/Modal";
 import TextInput from "../ui/TextInput";
+import { useAuth } from "../../hooks/useAuth";
 
 export default function ProfileScreen({
   profile,
   onResetSystem,
   isGuest,
-  onLogout,
-  onDeleteAccount,
+  user,
+  clearStorage,
 }) {
+  const { handleLogout, handleDeleteAccount } = useAuth({ user, clearStorage });
   const [activeModal, setActiveModal] = useState(null); // 'reset' | 'report' | 'delete-account' | null
   const [reportReason, setReportReason] = useState("");
 
@@ -75,7 +77,7 @@ export default function ProfileScreen({
             <Button
               text="LOGOUT"
               onClick={() => {
-                onLogout();
+                handleLogout();
               }}
               icon={LogOut}
               iconSize={20}
@@ -130,7 +132,7 @@ export default function ProfileScreen({
             />
             <Button
               text="I'm Sure"
-              onClick={() => onDeleteAccount()}
+              onClick={() => handleDeleteAccount()}
               className="button btn-danger w-full font-bold text-lg uppercase p-4 letter-spacing-2"
             />
           </div>

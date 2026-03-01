@@ -1,7 +1,10 @@
 import { Activity } from "lucide-react";
 import Button from "../../components/ui/Button";
+import { useAuth } from "../../hooks/useAuth";
 
-export default function WelcomeScreen({ onGuestMode, onAuth }) {
+export default function WelcomeScreen({ onAuth }) {
+  const { handleGuestLogin } = useAuth({});
+
   return (
     <div className="flex flex-col items-center justify-center h-full text-center p-6">
       <Activity size={80} className="text-primary mb-6 logo-icon" />
@@ -19,7 +22,7 @@ export default function WelcomeScreen({ onGuestMode, onAuth }) {
         />
         <Button
           text="Run as Guest?"
-          onClick={onGuestMode}
+          onClick={handleGuestLogin}
           className="button btn-secondary w-full font-bold text-lg uppercase p-4 letter-spacing-2"
         />
       </div>

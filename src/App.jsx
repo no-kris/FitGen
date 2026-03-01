@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import WelcomeScreen from "./features/onboarding/WelcomeScreen";
 import Modal from "./components/ui/Modal";
 import AuthModal from "./features/auth/AuthModal";
@@ -7,21 +7,32 @@ import ProfileScreen from "./components/screens/ProfileScreen";
 import ProfileSetupForm from "./features/onboarding/ProfileSetupForm";
 import LogsScreen from "./components/screens/LogsScreen";
 import PlanDashboard from "./features/dashboard/PlanDashboard";
-import generateNextWeekPlan from "./utils/generateNextWeekPlan";
 import ActiveWorkout from "./features/workout/ActiveWorkout";
 import { authService } from "./services/firebase/authServices";
 import { firestoreService } from "./services/firebase/firestoreServices";
-import sendWelcomeMessage from "./services/api/emailService";
 
 function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState("welcome");
   const [isGuest, setIsGuest] = useState(false);
-  const [profile, setProfile] = useState(null);
-  const [plan, setPlan] = useState(null);
-  const [history, setHistory] = useState([]);
-  const [activeWorkout, setActiveWorkout] = useState(null);
+  const [userData, setUserData] = useState({
+    profile: null,
+    plan: null,
+    history: [],
+  });
   const [showAuth, setShowAuth] = useState(false);
+  const [activeWorkout, setActiveWorkout] = useState(null);
+
+  const clearStorage = () => {
+    setUserData({ profile: null, plan: null, history: [] });
+    localStorage.removeItem("fitgen-active");
+  };
+
+  const stateRef = useRef({ userData, view });
+
+  useEffect(() => {
+    stateRef.current = { userData, view };
+  }, [userData, view]);
 
   useEffect(() => {
     const unsubscribe = authService.subscribeToAuthChanges(
@@ -30,6 +41,8 @@ function App() {
           setUser(currentUser);
           setIsGuest(currentUser.isAnonymous);
 
+          let hasPlan = stateRef.current.userData.plan;
+
           // FETCH CLOUD DATA
           try {
             const cloudData = await firestoreService.getUserData(
@@ -37,24 +50,24 @@ function App() {
             );
             if (cloudData) {
               // Apply cloud data to local state
+              setUserData((prev) => ({
+                profile: cloudData.profile || prev.profile,
+                plan: cloudData.plan || prev.plan,
+                history: cloudData.history || prev.history,
+              }));
+
               if (cloudData.plan) {
-                setPlan(cloudData.plan);
-              }
-              if (cloudData.profile) {
-                setProfile(cloudData.profile);
-              }
-              if (cloudData.history) {
-                setHistory(cloudData.history);
+                hasPlan = true;
               }
             } else {
               // No cloud data? (New User or First Sync)
-              // If they have local guest data, maybe we should upload it?
-              // For now, let's just save valid local data to cloud if it exists
-              if (plan || profile) {
+              const currentLocalState = stateRef.current.userData;
+
+              if (currentLocalState.plan || currentLocalState.profile) {
                 await firestoreService.saveUserData(currentUser.uid, {
-                  plan,
-                  profile,
-                  history,
+                  plan: currentLocalState.plan,
+                  profile: currentLocalState.profile,
+                  history: currentLocalState.history,
                 });
               }
             }
@@ -62,15 +75,15 @@ function App() {
             console.error("Sync Error:", err);
           }
 
-          if (view === "welcome") setView(plan ? "plan" : "profile");
+          if (stateRef.current.view === "welcome") {
+            setView(hasPlan ? "plan" : "profile");
+          }
         } else {
           setUser(null);
           // On logout we can safely clear state without dependency issues
           setIsGuest((prevIsGuest) => {
             if (!prevIsGuest) {
-              setPlan(null);
-              setProfile(null);
-              setHistory([]);
+              setUserData({ profile: null, plan: null, history: [] });
               setView("welcome");
             }
             return prevIsGuest;
@@ -79,167 +92,14 @@ function App() {
       }
     );
     return () => unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSavePlan = (plan, profile) => {
-    setPlan(plan);
-    setProfile(profile);
+    setUserData((prev) => ({ ...prev, plan, profile }));
     if (user) {
       firestoreService.saveUserData(user.uid, { plan, profile });
     }
     setView("plan");
-  };
-
-  const clearStorage = () => {
-    setPlan(null);
-    setProfile(null);
-    setHistory([]);
-    localStorage.removeItem("fitgen-active");
-  };
-
-  const handleSignUp = async (user) => {
-    try {
-      await authService.signUp(user.email, user.password);
-      sendWelcomeMessage(user.email);
-      alert("Account successfully created! Welcome email sent.");
-      setShowAuth(false);
-    } catch (error) {
-      console.error("Signup failed", error);
-    }
-  };
-
-  const handleLogin = async (user) => {
-    try {
-      await authService.signIn(user.email, user.password);
-      setShowAuth(false);
-    } catch (error) {
-      console.error("Login failed", error);
-    }
-  };
-
-  const handleGuestLogin = async () => {
-    try {
-      await authService.signInGuest();
-    } catch (error) {
-      console.log("Guest login failed", error);
-    }
-  };
-
-  const handleResetPassword = async (email) => {
-    try {
-      await authService.resetPassword(email);
-    } catch (error) {
-      console.error("Reset password failed", error);
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      if (user && user.isAnonymous) {
-        await handleDeleteAccount();
-      } else {
-        await authService.logout();
-      }
-    } catch (error) {
-      console.error("Logout failed", error);
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    try {
-      clearStorage();
-      await firestoreService.clearUserData(user.uid);
-      await authService.deleteAccount();
-      alert("Your account has been successfully deleted.");
-    } catch (error) {
-      console.log("Failed to delete the user", error);
-      if (error.code === "auth/requires-recent-login") {
-        alert(
-          "For security reasons, please log out and log back in before deleting your account."
-        );
-      } else {
-        alert("Failed to delete account completely. Please try again.");
-      }
-    }
-  };
-
-  const handleGenerateNextWeek = async (feedback) => {
-    try {
-      const result = await generateNextWeekPlan(
-        profile,
-        plan,
-        history,
-        feedback
-      );
-      const newWeek = result.weeks[0];
-      const newWeekPlan = {
-        ...plan,
-        programName: result.programName,
-        description: result.description,
-        weeks: [...plan.weeks, newWeek],
-      };
-      setPlan(newWeekPlan);
-      if (user) {
-        firestoreService.saveUserData(user.uid, { plan: newWeekPlan });
-      }
-      setView("plan");
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const handleReplaceExercise = (
-    weekIndex,
-    dayIndex,
-    exerciseIndex,
-    newExerciseName
-  ) => {
-    const newPlan = JSON.parse(JSON.stringify(plan));
-    const exercise =
-      newPlan.weeks[weekIndex].schedule[dayIndex].exercises[exerciseIndex];
-
-    const oldName = exercise.name;
-
-    exercise.alternatives = exercise.alternatives.filter(
-      (alt) => alt !== newExerciseName
-    );
-    exercise.alternatives.push(oldName);
-    exercise.name = newExerciseName;
-
-    setPlan(newPlan);
-    if (user) {
-      firestoreService.saveUserData(user.uid, { plan: newPlan });
-    }
-  };
-
-  const handleStartWorkout = (day) => {
-    const savedState = localStorage.getItem("fitgen-active");
-    if (savedState) {
-      const parsed = JSON.parse(savedState);
-      setActiveWorkout({ ...day, logs: parsed.logs, elapsed: parsed.elapsed });
-    } else {
-      setActiveWorkout(day);
-    }
-    setView("active");
-  };
-
-  const handleFinishWorkout = (log) => {
-    const updatedLog = {
-      ...log,
-      workout: {
-        ...log.workout,
-        date: new Date().toISOString(),
-      },
-    };
-    const updatedHistory = [...history, updatedLog];
-    setHistory(updatedHistory);
-    if (user) {
-      firestoreService.saveUserData(user.uid, { history: updatedHistory });
-    }
-    localStorage.removeItem("fitgen-active");
-    setActiveWorkout(null);
-    setView("logs");
   };
 
   const handleResetSystem = async () => {
@@ -258,10 +118,7 @@ function App() {
     <>
       <div className="app-container">
         {view === "welcome" ? (
-          <WelcomeScreen
-            onGuestMode={handleGuestLogin}
-            onAuth={() => setShowAuth(true)}
-          />
+          <WelcomeScreen onAuth={() => setShowAuth(true)} />
         ) : (
           <Layout
             activeTab={view}
@@ -271,27 +128,27 @@ function App() {
           >
             {view === "plan" && (
               <PlanDashboard
-                plan={plan}
-                history={history}
-                onStartWorkout={handleStartWorkout}
-                onGenerateNextWeek={handleGenerateNextWeek}
-                onReplaceExercise={handleReplaceExercise}
+                user={user}
+                userData={userData}
+                setUserData={setUserData}
+                setView={setView}
+                setActiveWorkout={setActiveWorkout}
               />
             )}
             {view === "logs" && (
               <div className="view-container">
-                <LogsScreen history={history} />
+                <LogsScreen history={userData.history} />
               </div>
             )}
             {view === "profile" && (
               <div className="view-container">
-                {plan ? (
+                {userData.plan ? (
                   <ProfileScreen
-                    profile={profile}
+                    profile={userData.profile}
                     onResetSystem={handleResetSystem}
                     isGuest={isGuest}
-                    onLogout={isGuest ? null : handleLogout}
-                    onDeleteAccount={isGuest ? null : handleDeleteAccount}
+                    user={user}
+                    clearStorage={clearStorage}
                   />
                 ) : (
                   <ProfileSetupForm onSavePlan={handleSavePlan} />
@@ -302,7 +159,11 @@ function App() {
               <div>
                 <ActiveWorkout
                   workout={activeWorkout}
-                  onFinish={handleFinishWorkout}
+                  user={user}
+                  userData={userData}
+                  setUserData={setUserData}
+                  setView={setView}
+                  setActiveWorkout={setActiveWorkout}
                   onClose={() => {
                     setView("plan");
                   }}
@@ -318,12 +179,7 @@ function App() {
         onClose={() => setShowAuth(false)}
         title="LOGIN OR SIGNUP"
       >
-        <AuthModal
-          onSignUp={handleSignUp}
-          onLogin={handleLogin}
-          onResetPassword={handleResetPassword}
-          onClose={() => setShowAuth(false)}
-        />
+        <AuthModal onClose={() => setShowAuth(false)} />
       </Modal>
     </>
   );
