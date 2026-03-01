@@ -9,7 +9,6 @@ import LogsScreen from "./components/screens/LogsScreen";
 import PlanDashboard from "./features/dashboard/PlanDashboard";
 import generateNextWeekPlan from "./utils/generateNextWeekPlan";
 import ActiveWorkout from "./features/workout/ActiveWorkout";
-import saveToLocalStorage from "./utils/saveToLocalStorage";
 import { authService } from "./services/firebase/authServices";
 import { firestoreService } from "./services/firebase/firestoreServices";
 import sendWelcomeMessage from "./services/api/emailService";
@@ -25,33 +24,11 @@ function App() {
   const [showAuth, setShowAuth] = useState(false);
 
   useEffect(() => {
-    const localUser = localStorage.getItem("fitgen-user");
-    const localPlan = localStorage.getItem("fitgen-plan");
-    const localProfile = localStorage.getItem("fitgen-profile");
-    const localHistory = localStorage.getItem("fitgen-history");
-    function loadUser() {
-      if (localUser) setUser(JSON.parse(localUser));
-      if (localPlan) setPlan(JSON.parse(localPlan));
-      if (localProfile) setProfile(JSON.parse(localProfile));
-      if (localHistory) {
-        const parsedHistory = JSON.parse(localHistory);
-        setHistory(
-          Array.isArray(parsedHistory)
-            ? parsedHistory.filter((h) => h && h.workout)
-            : []
-        );
-      }
-    }
-    loadUser();
-  }, []);
-
-  useEffect(() => {
     const unsubscribe = authService.subscribeToAuthChanges(
       async (currentUser) => {
         if (currentUser) {
           setUser(currentUser);
-          saveToLocalStorage("fitgen-user", currentUser);
-          setIsGuest(false);
+          setIsGuest(currentUser.isAnonymous);
 
           // FETCH CLOUD DATA
           try {
@@ -62,15 +39,12 @@ function App() {
               // Apply cloud data to local state
               if (cloudData.plan) {
                 setPlan(cloudData.plan);
-                saveToLocalStorage("fitgen-plan", cloudData.plan);
               }
               if (cloudData.profile) {
                 setProfile(cloudData.profile);
-                saveToLocalStorage("fitgen-profile", cloudData.profile);
               }
               if (cloudData.history) {
                 setHistory(cloudData.history);
-                saveToLocalStorage("fitgen-history", cloudData.history);
               }
             } else {
               // No cloud data? (New User or First Sync)
@@ -91,7 +65,6 @@ function App() {
           if (view === "welcome") setView(plan ? "plan" : "profile");
         } else {
           setUser(null);
-          localStorage.removeItem("fitgen-user");
           // On logout we can safely clear state without dependency issues
           setIsGuest((prevIsGuest) => {
             if (!prevIsGuest) {
@@ -112,8 +85,6 @@ function App() {
   const handleSavePlan = (plan, profile) => {
     setPlan(plan);
     setProfile(profile);
-    saveToLocalStorage("fitgen-plan", plan);
-    saveToLocalStorage("fitgen-profile", profile);
     if (user) {
       firestoreService.saveUserData(user.uid, { plan, profile });
     }
@@ -124,9 +95,6 @@ function App() {
     setPlan(null);
     setProfile(null);
     setHistory([]);
-    localStorage.removeItem("fitgen-plan");
-    localStorage.removeItem("fitgen-profile");
-    localStorage.removeItem("fitgen-history");
     localStorage.removeItem("fitgen-active");
   };
 
@@ -135,7 +103,6 @@ function App() {
       await authService.signUp(user.email, user.password);
       sendWelcomeMessage(user.email);
       alert("Account successfully created! Welcome email sent.");
-      setIsGuest(false);
       setShowAuth(false);
     } catch (error) {
       console.error("Signup failed", error);
@@ -145,10 +112,17 @@ function App() {
   const handleLogin = async (user) => {
     try {
       await authService.signIn(user.email, user.password);
-      setIsGuest(false);
       setShowAuth(false);
     } catch (error) {
       console.error("Login failed", error);
+    }
+  };
+
+  const handleGuestLogin = async () => {
+    try {
+      await authService.signInGuest();
+    } catch (error) {
+      console.log("Guest login failed", error);
     }
   };
 
@@ -162,7 +136,11 @@ function App() {
 
   const handleLogout = async () => {
     try {
-      await authService.logout();
+      if (user && user.isAnonymous) {
+        await handleDeleteAccount();
+      } else {
+        await authService.logout();
+      }
     } catch (error) {
       console.error("Logout failed", error);
     }
@@ -202,7 +180,6 @@ function App() {
         weeks: [...plan.weeks, newWeek],
       };
       setPlan(newWeekPlan);
-      saveToLocalStorage("fitgen-plan", newWeekPlan);
       if (user) {
         firestoreService.saveUserData(user.uid, { plan: newWeekPlan });
       }
@@ -231,7 +208,6 @@ function App() {
     exercise.name = newExerciseName;
 
     setPlan(newPlan);
-    saveToLocalStorage("fitgen-plan", newPlan);
     if (user) {
       firestoreService.saveUserData(user.uid, { plan: newPlan });
     }
@@ -258,7 +234,6 @@ function App() {
     };
     const updatedHistory = [...history, updatedLog];
     setHistory(updatedHistory);
-    saveToLocalStorage("fitgen-history", updatedHistory);
     if (user) {
       firestoreService.saveUserData(user.uid, { history: updatedHistory });
     }
@@ -284,10 +259,7 @@ function App() {
       <div className="app-container">
         {view === "welcome" ? (
           <WelcomeScreen
-            onGuestMode={() => {
-              setIsGuest(true);
-              setView(plan ? "plan" : "profile");
-            }}
+            onGuestMode={handleGuestLogin}
             onAuth={() => setShowAuth(true)}
           />
         ) : (
