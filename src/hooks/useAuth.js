@@ -11,6 +11,7 @@ export function useAuth({ user, clearStorage, setShowAuth }) {
       setShowAuth(false);
     } catch (error) {
       console.error("Signup failed", error);
+      throw new Error("Failed to Sign up. Try again.");
     }
   };
 
@@ -20,6 +21,7 @@ export function useAuth({ user, clearStorage, setShowAuth }) {
       setShowAuth(false);
     } catch (error) {
       console.error("Login failed", error);
+      throw new Error("Failed to login. Try again or create an account.");
     }
   };
 
@@ -49,7 +51,7 @@ export function useAuth({ user, clearStorage, setShowAuth }) {
       console.log("Failed to delete the user", error);
       if (error.code === "auth/requires-recent-login") {
         alert(
-          "For security reasons, please log out and log back in before deleting your account."
+          "For security reasons, please log out and log back in before deleting your account.",
         );
       } else {
         alert("Failed to delete account completely. Please try again.");

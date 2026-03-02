@@ -15,14 +15,18 @@ export default function AuthModal({ onClose }) {
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (mode === "reset") {
       if (!email) {
         setMessage("EMAIL REQUIRED");
         return;
       }
-      handleResetPassword(email);
-      onClose();
+      try {
+        await handleResetPassword(email);
+        onClose();
+      } catch (error) {
+        setMessage(error.message);
+      }
       return;
     }
 
@@ -33,12 +37,21 @@ export default function AuthModal({ onClose }) {
 
     if (mode === "login") {
       setMessage("AUTHENTICATING...");
-      handleLogin({ email, password });
+      try {
+        await handleLogin({ email, password });
+        setMessage("");
+      } catch (error) {
+        setMessage(error.message);
+      }
     } else if (mode === "signup") {
       setMessage("REGISTERING...");
-      handleSignUp({ email, password });
+      try {
+        await handleSignUp({ email, password });
+        setMessage("");
+      } catch (error) {
+        setMessage(error.message);
+      }
     }
-    onClose();
   };
 
   return (
