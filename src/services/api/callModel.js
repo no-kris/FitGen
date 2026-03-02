@@ -16,7 +16,14 @@ const callModel = async (prompt) => {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to call backend API");
+        let errDesc = "Failed to call backend API";
+        try {
+          const errData = await response.json();
+          if (errData.error) errDesc = errData.error;
+        } catch (e) {
+          // Ignore json parse error
+        }
+        throw new Error(errDesc);
       }
 
       const data = await response.json();
