@@ -4,14 +4,17 @@ import Button from "../ui/Button";
 import Modal from "../ui/Modal";
 import TextInput from "../ui/TextInput";
 import { useAuth } from "../../hooks/useAuth";
+import { useAppContext } from "../../context/AppContext";
 
-export default function ProfileScreen({
-  profile,
-  onResetSystem,
-  isGuest,
-  user,
-  clearStorage,
-}) {
+export default function ProfileScreen() {
+  const {
+    userData,
+    handleResetSystem: onResetSystem,
+    isGuest,
+    user,
+    clearStorage,
+  } = useAppContext();
+  const profile = userData.profile;
   const { handleLogout, handleDeleteAccount } = useAuth({ user, clearStorage });
   const [activeModal, setActiveModal] = useState(null); // 'reset' | 'report' | 'delete-account' | null
   const [reportReason, setReportReason] = useState("");

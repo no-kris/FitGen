@@ -5,23 +5,13 @@ import { CheckCircle2, Notebook, PlusCircle } from "lucide-react";
 import FeedbackModal from "../workout/FeedbackModal";
 import DayDetailModal from "../workout/DayDetailModal";
 import { useWorkout } from "../../hooks/useWorkout";
+import { useAppContext } from "../../context/AppContext";
 
-export default function PlanDashboard({
-  user,
-  userData,
-  setUserData,
-  setView,
-  setActiveWorkout,
-}) {
+export default function PlanDashboard() {
+  const { userData } = useAppContext();
   const { plan, history } = userData;
   const { handleGenerateNextWeek, handleReplaceExercise, handleStartWorkout } =
-    useWorkout({
-      user,
-      userData,
-      setUserData,
-      setView,
-      setActiveWorkout,
-    });
+    useWorkout();
 
   const [weekIndex, setWeekIndex] = useState(0);
   const [activeDayIndex, setActiveDayIndex] = useState(null);

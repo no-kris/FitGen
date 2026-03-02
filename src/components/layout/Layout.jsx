@@ -1,43 +1,40 @@
 import GuestBanner from "../ui/GuestBanner";
 import NavIcon from "../ui/NavIcon";
 import { Calendar, Dumbbell, User } from "lucide-react";
+import { useAppContext } from "../../context/AppContext";
 
-export default function Layout({
-  activeTab,
-  onTabChange,
-  isGuest,
-  onAuth,
-  children,
-}) {
+export default function Layout({ children }) {
+  const { view, setView, isGuest, setShowAuth } = useAppContext();
+
   return (
     <div className="app-container">
-      {isGuest && <GuestBanner onClick={onAuth} />}
+      {isGuest && <GuestBanner onClick={() => setShowAuth(true)} />}
       <div
         className={`content-area ${
-          activeTab !== "welcome" && activeTab !== "active" ? "has-nav" : ""
+          view !== "welcome" && view !== "active" ? "has-nav" : ""
         }`}
       >
         {children}
       </div>
-      {activeTab !== "welcome" && activeTab !== "active" && (
+      {view !== "welcome" && view !== "active" && (
         <div className="bottom-nav">
           <NavIcon
             icon={Calendar}
             label="PLAN"
-            onClick={() => onTabChange("plan")}
-            active={activeTab === "plan"}
+            onClick={() => setView("plan")}
+            active={view === "plan"}
           />
           <NavIcon
             icon={Dumbbell}
             label="LOGS"
-            onClick={() => onTabChange("logs")}
-            active={activeTab === "logs"}
+            onClick={() => setView("logs")}
+            active={view === "logs"}
           />
           <NavIcon
             icon={User}
             label="PROFILE"
-            onClick={() => onTabChange("profile")}
-            active={activeTab === "profile"}
+            onClick={() => setView("profile")}
+            active={view === "profile"}
           />
         </div>
       )}

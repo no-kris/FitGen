@@ -1,13 +1,10 @@
 import generateNextWeekPlan from "../utils/generateNextWeekPlan";
 import { firestoreService } from "../services/firebase/firestoreServices";
+import { useAppContext } from "../context/AppContext";
 
-export function useWorkout({
-  user,
-  userData,
-  setUserData,
-  setView,
-  setActiveWorkout,
-}) {
+export function useWorkout() {
+  const { user, userData, setUserData, setView, setActiveWorkout } =
+    useAppContext();
   const { plan, profile, history } = userData;
 
   const handleGenerateNextWeek = async (feedback) => {

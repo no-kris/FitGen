@@ -4,8 +4,10 @@ import { Loader2, Settings } from "lucide-react";
 import Button from "../../components/ui/Button";
 import handleNextStep from "./helpers/handleNextStep";
 import generateInitialPlan from "../../utils/generateInitialPlan";
+import { useAppContext } from "../../context/AppContext";
 
-export default function ProfileSetupForm({ onSavePlan }) {
+export default function ProfileSetupForm() {
+  const { handleSavePlan: onSavePlan } = useAppContext();
   const [step, setStep] = useState(1);
   const totalSteps = 8;
   const [formData, setFormData] = useState({

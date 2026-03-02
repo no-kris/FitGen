@@ -1,9 +1,11 @@
 import { Activity } from "lucide-react";
 import Button from "../../components/ui/Button";
 import { useAuth } from "../../hooks/useAuth";
+import { useAppContext } from "../../context/AppContext";
 
-export default function WelcomeScreen({ onAuth }) {
+export default function WelcomeScreen() {
   const { handleGuestLogin } = useAuth({});
+  const { setShowAuth } = useAppContext();
 
   return (
     <div className="flex flex-col items-center justify-center h-full text-center p-6">
@@ -17,7 +19,7 @@ export default function WelcomeScreen({ onAuth }) {
       <div className="flex flex-col gap-4 max-w-xs">
         <Button
           text="Initialize Account"
-          onClick={onAuth}
+          onClick={() => setShowAuth(true)}
           className="button btn-primary w-full font-bold text-lg uppercase p-4 letter-spacing-2"
         />
         <Button

@@ -1,8 +1,11 @@
 import { useState } from "react";
 import Button from "../ui/Button";
 import { ArrowDown, ArrowUp } from "lucide-react";
+import { useAppContext } from "../../context/AppContext";
 
-export default function LogsScreen({ history }) {
+export default function LogsScreen() {
+  const { userData } = useAppContext();
+  const history = userData.history;
   const [expandedIndex, setExpandedIndex] = useState(null);
 
   return (

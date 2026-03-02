@@ -5,23 +5,12 @@ import formatTimer from "../../utils/formatTimer";
 import WorkoutCard from "./WorkoutCard";
 import Modal from "../../components/ui/Modal";
 import { useWorkout } from "../../hooks/useWorkout";
+import { useAppContext } from "../../context/AppContext";
 
-export default function ActiveWorkout({
-  workout,
-  onClose,
-  user,
-  userData,
-  setUserData,
-  setView,
-  setActiveWorkout,
-}) {
-  const { handleFinishWorkout } = useWorkout({
-    user,
-    userData,
-    setUserData,
-    setView,
-    setActiveWorkout,
-  });
+export default function ActiveWorkout() {
+  const { activeWorkout: workout, setView } = useAppContext();
+  const onClose = () => setView("plan");
+  const { handleFinishWorkout } = useWorkout();
 
   const [logs, setLogs] = useState(
     () =>
