@@ -1,5 +1,5 @@
 {
-  "appId": "com.fitgen.app",
-  "appName": "FitGenAI",
+  "appId": "com.kristreska.fitgen",
+  "appName": "FitGen: AI Coach",
   "webDir": "dist"
 }

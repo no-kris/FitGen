@@ -15,6 +15,12 @@
     "@capacitor/cli": "^8.0.0",
     "@capacitor/core": "^8.0.0",
     "@capacitor/haptics": "^8.0.0",
+<<<<<<< HEAD
+=======
+    "@capacitor/ios": "^8.0.0",
+    "@emailjs/browser": "^4.4.1",
+    "cordova-plugin-purchase": "^13.12.1",
+>>>>>>> iphone
     "firebase": "^12.7.0",
     "lucide-react": "^0.562.0",
     "react": "^19.2.0",

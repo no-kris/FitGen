@@ -57,14 +57,18 @@ export default function DayDetailModal({
                     <p className="text-base text-muted uppercase letter-spacing-2 mb-4">
                       Select Alternative
                     </p>
+<<<<<<< HEAD
                     <div className="flex flex-col gap-5 scrollable-list pr-2">
+=======
+                    <div className="flex flex-col gap-5 scrollable-list">
+>>>>>>> iphone
                       {exercise.alternatives.map((alt, altIndex) => (
                         <div key={altIndex}>
                           <Button
                             text={alt}
                             Icon={RotateCcw}
                             iconSize={16}
-                            className="button btn-primary text-lg letter-spacing-2 font-bold w-full flex items-center gap-1 p-2"
+                            className="button btn-primary text-lg letter-spacing-2 font-bold w-full flex items-start gap-1 p-2"
                             onClick={() => {
                               onReplaceExercise(index, alt);
                               setExpandedIndex(null);

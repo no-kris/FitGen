@@ -6,16 +6,29 @@ import { KeepAwake } from "@capacitor-community/keep-awake";
 
 export default function RestTimer({ restTime, onRestComplete }) {
   const [timeLeft, setTimeLeft] = useState(restTime);
+<<<<<<< HEAD
+=======
+  //  `useRef` discards the value on subsequent renders.
+  // eslint-disable-next-line
+>>>>>>> iphone
   const endTimeRef = useRef(Date.now() + restTime * 1000);
 
   useEffect(() => {
     KeepAwake.keepAwake();
+<<<<<<< HEAD
 
     const interval = setInterval(() => {
       const now = Date.now();
       const difference = endTimeRef.current - now;
       const secondsRemaining = Math.max(0, Math.ceil(difference / 1000));
 
+=======
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const difference = endTimeRef.current - now;
+      const secondsRemaining = Math.max(0, Math.ceil(difference / 1000));
+
+>>>>>>> iphone
       setTimeLeft(secondsRemaining);
 
       if (secondsRemaining <= 0) {

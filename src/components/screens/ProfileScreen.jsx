@@ -3,7 +3,10 @@ import { Dumbbell, Settings, LogOut, Scale, Weight } from "lucide-react";
 import Button from "../ui/Button";
 import Modal from "../ui/Modal";
 import TextInput from "../ui/TextInput";
+import { useAuth } from "../../hooks/useAuth";
+import { useAppContext } from "../../context/AppContext";
 
+<<<<<<< HEAD
 export default function ProfileScreen({
   profile,
   onResetSystem,
@@ -12,6 +15,19 @@ export default function ProfileScreen({
   onDeleteAccount,
 }) {
   const [activeModal, setActiveModal] = useState(null); // 'reset' | 'report' | null
+=======
+export default function ProfileScreen() {
+  const {
+    userData,
+    handleResetSystem: onResetSystem,
+    isGuest,
+    user,
+    clearStorage,
+  } = useAppContext();
+  const profile = userData.profile;
+  const { handleLogout, handleDeleteAccount } = useAuth({ user, clearStorage });
+  const [activeModal, setActiveModal] = useState(null); // 'reset' | 'report' | 'delete-account' | null
+>>>>>>> iphone
   const [reportReason, setReportReason] = useState("");
 
   const Icon =
@@ -63,22 +79,13 @@ export default function ProfileScreen({
             </div>
           </div>
         </div>
-        <div className="flex flex-col justify-between h-full">
+      </div>
+      <div className="flex flex-col h-full">
+        <div>
           <Button
             text="RESET SYSTEM"
             onClick={() => setActiveModal("reset")}
             className="button btn-danger w-full mb-4 text-2xl font-bold letter-spacing-2 p-3"
-          />
-          <Button
-            text="BUY DEV PROTEIN?"
-            onClick={() =>
-              window.open(
-                "https://www.buymeacoffee.com/kristreska",
-                "_blank",
-                "noopener,noreferrer"
-              )
-            }
-            className="button btn-primary w-full mb-4 text-2xl font-bold letter-spacing-2 p-3"
           />
           {!isGuest && (
             <Button
@@ -91,9 +98,23 @@ export default function ProfileScreen({
               className="button btn-secondary w-full mb-4 text-2xl font-bold letter-spacing-2 p-3"
             />
           )}
+        </div>
 
-          <div className="flex justify-between pb-4">
+        <div className="flex justify-between pb-4">
+          <Button
+            text="PRIVACY POLICY"
+            onClick={() =>
+              window.open(
+                "https://docs.google.com/document/d/e/2PACX-1vQIArxvMDxCVizYEzY1IgbwGab-v29NuDK43yi6oeIvZZxDmwIBbj_68wbUIsTdFOWQSC9sUbzSrdHX/pub",
+                "_blank",
+                "noopener,noreferrer"
+              )
+            }
+            className="text-success uppercase"
+          />
+          {!isGuest && (
             <Button
+<<<<<<< HEAD
               text="PRIVACY POLICY"
               onClick={() =>
                 window.open(
@@ -103,6 +124,37 @@ export default function ProfileScreen({
                 )
               }
               className="text-success uppercase"
+=======
+              text="DELETE ACCOUNT"
+              onClick={() => setActiveModal("delete-account")}
+              className="text-error uppercase"
+            />
+          )}
+          <Button
+            text="File REPORT"
+            onClick={() => setActiveModal("report")}
+            className="text-primary uppercase"
+          />
+        </div>
+      </div>
+
+      <Modal
+        isOpen={activeModal === "delete-account"}
+        onClose={() => setActiveModal(null)}
+        title="Delete Account?"
+      >
+        <div className="flex flex-col gap-2">
+          <p className="text-lg mb-2">
+            Are you sure you want to delete your account? Once you delete your
+            account your data will be erased and you will not be able to get it
+            back.
+          </p>
+          <div className="flex justify-center w-full gap-2">
+            <Button
+              text="Cancel"
+              onClick={() => setActiveModal(null)}
+              className="button btn-muted w-full font-bold text-lg uppercase p-4 letter-spacing-2"
+>>>>>>> iphone
             />
             {!isGuest && (
               <Button
@@ -112,13 +164,19 @@ export default function ProfileScreen({
               />
             )}
             <Button
+<<<<<<< HEAD
               text="File REPORT"
               onClick={() => setActiveModal("report")}
               className="text-primary uppercase"
+=======
+              text="I'm Sure"
+              onClick={() => handleDeleteAccount()}
+              className="button btn-danger w-full font-bold text-lg uppercase p-4 letter-spacing-2"
+>>>>>>> iphone
             />
           </div>
         </div>
-      </div>
+      </Modal>
 
       <Modal
         isOpen={activeModal === "delete-account"}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import WelcomeScreen from "./features/onboarding/WelcomeScreen";
 import Modal from "./components/ui/Modal";
 import AuthModal from "./features/auth/AuthModal";
@@ -7,22 +7,29 @@ import ProfileScreen from "./components/screens/ProfileScreen";
 import ProfileSetupForm from "./features/onboarding/ProfileSetupForm";
 import LogsScreen from "./components/screens/LogsScreen";
 import PlanDashboard from "./features/dashboard/PlanDashboard";
-import generateNextWeekPlan from "./utils/generateNextWeekPlan";
 import ActiveWorkout from "./features/workout/ActiveWorkout";
+<<<<<<< HEAD
 import saveToLocalStorage from "./utils/saveToLocalStorage";
 import { authService } from "./services/firebase/authServices";
 import { firestoreService } from "./services/firebase/firestoreServices";
+=======
+import { firestoreService } from "./services/firebase/firestoreServices";
+import { AppContext } from "./context/AppContext";
+import { useAuthObserver } from "./hooks/useAuthObserver";
+import { useCloudSync } from "./hooks/useCloudSync";
+>>>>>>> iphone
 
 function App() {
-  const [user, setUser] = useState(null);
   const [view, setView] = useState("welcome");
-  const [isGuest, setIsGuest] = useState(false);
-  const [profile, setProfile] = useState(null);
-  const [plan, setPlan] = useState(null);
-  const [history, setHistory] = useState([]);
-  const [activeWorkout, setActiveWorkout] = useState(null);
   const [showAuth, setShowAuth] = useState(false);
+  const [activeWorkout, setActiveWorkout] = useState(null);
+  const [userData, setUserData] = useState({
+    profile: null,
+    plan: null,
+    history: [],
+  });
 
+<<<<<<< HEAD
   useEffect(() => {
     const localUser = localStorage.getItem("fitgen-user");
     const localPlan = localStorage.getItem("fitgen-plan");
@@ -106,28 +113,53 @@ function App() {
     localStorage.removeItem("fitgen-plan");
     localStorage.removeItem("fitgen-profile");
     localStorage.removeItem("fitgen-history");
+=======
+  const handleLogoutEvent = () => {
+    // Only clear data and redirect if they weren't a guest
+    setUserData({ profile: null, plan: null, history: [] });
+    setView("welcome");
+  };
+
+  const handleSyncComplete = (hasPlan) => {
+    if (view === "welcome") {
+      setView(hasPlan ? "plan" : "profile");
+    }
+  };
+
+  const { user, setUser, isGuest, setIsGuest } =
+    useAuthObserver(handleLogoutEvent);
+  useCloudSync(user, userData, setUserData, handleSyncComplete);
+
+  const clearStorage = () => {
+    setUserData({ profile: null, plan: null, history: [] });
+>>>>>>> iphone
     localStorage.removeItem("fitgen-active");
   };
 
   const handleSavePlan = (plan, profile) => {
+<<<<<<< HEAD
     setPlan(plan);
     setProfile(profile);
     saveToLocalStorage("fitgen-plan", plan);
     saveToLocalStorage("fitgen-profile", profile);
+=======
+    setUserData((prev) => ({ ...prev, plan, profile }));
+>>>>>>> iphone
     if (user) {
       firestoreService.saveUserData(user.uid, { plan, profile });
     }
     setView("plan");
   };
 
-  const handleSignUp = async (user) => {
-    try {
-      await authService.signUp(user.email, user.password);
-      setIsGuest(false);
-      setShowAuth(false);
-    } catch (error) {
-      console.error("Signup failed", error);
+  const handleResetSystem = async () => {
+    if (user) {
+      try {
+        await firestoreService.clearUserData(user.uid);
+      } catch (error) {
+        console.error("Error clearing user data:", error);
+      }
     }
+<<<<<<< HEAD
   };
 
   const handleLogin = async (user) => {
@@ -264,43 +296,46 @@ function App() {
       }
     }
     clearLocalData();
+=======
+    clearStorage();
+>>>>>>> iphone
     setView("profile");
   };
 
+  const contextValue = {
+    user,
+    setUser,
+    view,
+    setView,
+    isGuest,
+    setIsGuest,
+    userData,
+    setUserData,
+    showAuth,
+    setShowAuth,
+    activeWorkout,
+    setActiveWorkout,
+    clearStorage,
+    handleSavePlan,
+    handleResetSystem,
+  };
+
   return (
-    <>
+    <AppContext.Provider value={contextValue}>
       <div className="app-container">
         {view === "welcome" ? (
-          <WelcomeScreen
-            onGuestMode={() => {
-              setIsGuest(true);
-              setView(plan ? "plan" : "profile");
-            }}
-            onAuth={() => setShowAuth(true)}
-          />
+          <WelcomeScreen />
         ) : (
-          <Layout
-            activeTab={view}
-            onTabChange={setView}
-            isGuest={isGuest}
-            onAuth={() => setShowAuth(true)}
-          >
-            {view === "plan" && (
-              <PlanDashboard
-                plan={plan}
-                history={history}
-                onStartWorkout={handleStartWorkout}
-                onGenerateNextWeek={handleGenerateNextWeek}
-                onReplaceExercise={handleReplaceExercise}
-              />
-            )}
+          <Layout>
+            {view === "plan" && <PlanDashboard />}
             {view === "logs" && (
               <div className="view-container">
-                <LogsScreen history={history} />
+                <LogsScreen />
               </div>
             )}
             {view === "profile" && (
               <div className="view-container">
+<<<<<<< HEAD
                 {plan ? (
                   <ProfileScreen
                     profile={profile}
@@ -312,17 +347,14 @@ function App() {
                 ) : (
                   <ProfileSetupForm onSavePlan={handleSavePlan} />
                 )}
+=======
+                {userData.plan ? <ProfileScreen /> : <ProfileSetupForm />}
+>>>>>>> iphone
               </div>
             )}
             {view === "active" && activeWorkout && (
               <div>
-                <ActiveWorkout
-                  workout={activeWorkout}
-                  onFinish={handleFinishWorkout}
-                  onClose={() => {
-                    setView("plan");
-                  }}
-                />
+                <ActiveWorkout />
               </div>
             )}
           </Layout>
@@ -334,14 +366,9 @@ function App() {
         onClose={() => setShowAuth(false)}
         title="LOGIN OR SIGNUP"
       >
-        <AuthModal
-          onSignUp={handleSignUp}
-          onLogin={handleLogin}
-          onResetPassword={handleResetPassword}
-          onClose={() => setShowAuth(false)}
-        />
+        <AuthModal onClose={() => setShowAuth(false)} />
       </Modal>
-    </>
+    </AppContext.Provider>
   );
 }
 

@@ -4,30 +4,31 @@ import Schedule from "./Schedule";
 import { CheckCircle2, Notebook, PlusCircle } from "lucide-react";
 import FeedbackModal from "../workout/FeedbackModal";
 import DayDetailModal from "../workout/DayDetailModal";
+import { useWorkout } from "../../hooks/useWorkout";
+import { useAppContext } from "../../context/AppContext";
 
-export default function PlanDashboard({
-  plan,
-  history,
-  onStartWorkout,
-  onGenerateNextWeek,
-  onReplaceExercise,
-}) {
+export default function PlanDashboard() {
+  const { userData } = useAppContext();
+  const { plan, history } = userData;
+  const { handleGenerateNextWeek, handleReplaceExercise, handleStartWorkout } =
+    useWorkout();
+
   const [weekIndex, setWeekIndex] = useState(0);
   const [activeDayIndex, setActiveDayIndex] = useState(null);
   const [showCheckin, setShowCheckin] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  if (!plan || !plan.weeks || plan.totalWeeks === 0)
-    return (
-      <div className="text-center text-2xl text-muted p-6">NO DATA FOUND</div>
-    );
-
   useEffect(() => {
     if (plan?.weeks) {
       setWeekIndex(plan.weeks.length - 1);
     }
   }, [plan]);
+
+  if (!plan || !plan.weeks || plan.totalWeeks === 0)
+    return (
+      <div className="text-center text-2xl text-muted p-6">NO DATA FOUND</div>
+    );
 
   const currentWeek = plan.weeks[weekIndex] || plan.weeks[0];
   const activeDayDetails =
@@ -60,7 +61,7 @@ export default function PlanDashboard({
   const handleCheckin = async (feedback) => {
     setIsLoading(true);
     try {
-      await onGenerateNextWeek(feedback);
+      await handleGenerateNextWeek(feedback);
       setShowCheckin(false);
     } catch (error) {
       setError(error);
@@ -81,11 +82,13 @@ export default function PlanDashboard({
         </div>
       </div>
 
-      <div className="flex gap-4 mt-4">
+      <div className="flex gap-4 mt-4 overflow-x-auto">
         {plan.weeks.map((week, index) => (
           <div
             key={index}
-            className={`p-2 ${weekIndex === index ? "bg-primary" : "bg-muted"}`}
+            className={`p-2 shrink-0 ${
+              weekIndex === index ? "bg-primary" : "bg-muted"
+            }`}
           >
             <Button
               onClick={() => setWeekIndex(index)}
@@ -115,7 +118,7 @@ export default function PlanDashboard({
           currentWeek={currentWeek}
           setDetails={setActiveDayIndex}
           onCompleted={handleCompleted}
-          onStartWorkout={onStartWorkout}
+          onStartWorkout={handleStartWorkout}
         />
       </div>
 
@@ -138,9 +141,9 @@ export default function PlanDashboard({
             <Button
               text={`CHECK-IN & GENERATE WEEK ${currentWeek.weekNumber + 1}`}
               Icon={PlusCircle}
-              iconSize={24}
+              iconSize={20}
               onClick={() => setShowCheckin(true)}
-              className="flex items-center justify-center gap-4 button btn-primary w-full font-bold text-xl uppercase p-4 letter-spacing-2 mt-4"
+              className="flex items-center justify-center gap-4 button btn-primary w-full font-bold text-lg uppercase p-4 letter-spacing-2 mt-4"
               disabled={!allWorkoutsCompleted}
             />
           </>
@@ -160,7 +163,7 @@ export default function PlanDashboard({
         onClose={() => setActiveDayIndex(null)}
         details={activeDayDetails}
         onReplaceExercise={(exIndex, newEx) => {
-          onReplaceExercise(weekIndex, activeDayIndex, exIndex, newEx);
+          handleReplaceExercise(weekIndex, activeDayIndex, exIndex, newEx);
         }}
       />
     </div>

@@ -1,11 +1,21 @@
+<<<<<<< HEAD
 import { ArrowLeft } from "lucide-react";
+=======
+import { ArrowLeft, Weight } from "lucide-react";
+>>>>>>> iphone
 import { useEffect, useRef, useState } from "react";
 import Button from "../../components/ui/Button";
 import formatTimer from "../../utils/formatTimer";
 import WorkoutCard from "./WorkoutCard";
 import Modal from "../../components/ui/Modal";
+import { useWorkout } from "../../hooks/useWorkout";
+import { useAppContext } from "../../context/AppContext";
 
-export default function ActiveWorkout({ workout, onFinish, onClose }) {
+export default function ActiveWorkout() {
+  const { activeWorkout: workout, setView } = useAppContext();
+  const onClose = () => setView("plan");
+  const { handleFinishWorkout } = useWorkout();
+
   const [logs, setLogs] = useState(
     () =>
       workout.logs ||
@@ -20,14 +30,25 @@ export default function ActiveWorkout({ workout, onFinish, onClose }) {
   );
   const [timer, setTimer] = useState(workout.elapsed || 0);
   const [showConfirm, setShowConfirm] = useState(null);
+<<<<<<< HEAD
+=======
+  //  `useRef` discards the value on subsequent renders.
+  // eslint-disable-next-line
+>>>>>>> iphone
   const startTimeRef = useRef(Date.now() - timer * 1000);
 
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
+<<<<<<< HEAD
       const elapsedSeconds = Math.floor((now - startTimeRef.current) / 1000);
       setTimer(elapsedSeconds);
     }, 100);
+=======
+      const elapsedtime = Math.floor((now - startTimeRef.current) / 1000);
+      setTimer(elapsedtime);
+    }, 1000);
+>>>>>>> iphone
     return () => clearInterval(interval);
   }, []);
 
@@ -121,7 +142,35 @@ export default function ActiveWorkout({ workout, onFinish, onClose }) {
                 }}
                 className="button btn-danger w-full font-bold text-lg uppercase p-4 letter-spacing-2"
               />
+<<<<<<< HEAD
             )}
+=======
+              <Button
+                text={showConfirm === "exit" ? "Save" : "Finish"}
+                onClick={
+                  showConfirm === "exit"
+                    ? () => handleSaveProgress()
+                    : () =>
+                        handleFinishWorkout({
+                          workout,
+                          logs,
+                          duration: timer,
+                        })
+                }
+                className="button btn-primary w-full font-bold text-lg uppercase p-4 letter-spacing-2"
+              />
+              {showConfirm === "exit" && (
+                <Button
+                  text="Discard"
+                  onClick={() => {
+                    localStorage.removeItem("fitgen-active");
+                    onClose();
+                  }}
+                  className="button btn-danger w-full font-bold text-lg uppercase p-4 letter-spacing-2"
+                />
+              )}
+            </div>
+>>>>>>> iphone
           </div>
         </div>
       </Modal>
