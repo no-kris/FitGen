@@ -98,9 +98,3 @@ Handles login and signup forms.
 
 - `utils/generateInitialPlan.js`: Constructs the detailed LLM prompt for the initial plan generation.
 - `utils/generateNextWeekPlan.js`: Context-aware generation that reads previous weeks and user feedback.
-
-## 4. Design Patterns
-
-- **Prop Drilling**: Since the app is relatively shallow, state updates (like `onStartWorkout`) are passed down as props from `App` to `Layout` to `PlanDashboard` to `Schedule`.
-- **Conditional Rendering**: Views are exclusive. `App` renders `WelcomeScreen` OR `Layout` (which contains `PlanDashboard`, `LogsScreen`, etc.).
-- **Modals**: Used for ephemeral interactions (Auth, Exercise Details, Confirmations). Managed by local boolean states in the parent components.
