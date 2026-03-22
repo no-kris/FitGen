@@ -20,7 +20,7 @@ const callModel = async (prompt) => {
         try {
           const errData = await response.json();
           if (errData.error) errDesc = errData.error;
-        } catch (e) {
+        } catch {
           // Ignore json parse error
         }
         throw new Error(errDesc);
