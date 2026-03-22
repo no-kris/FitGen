@@ -23,6 +23,32 @@ function createJsonResponse(body, status) {
 }
 
 /**
+ * Verifies a Firebase ID token using the Firebase Auth REST API.
+ */
+async function verifyFirebaseToken(token) {
+  const apiKey = process.env.VITE_FIREBASE_API_KEY;
+  if (!apiKey)
+    throw new Error("Server configuration error: Missing Firebase API key");
+
+  const response = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken: token }),
+    }
+  );
+
+  if (!response.ok) {
+    return false;
+  }
+
+  const data = await response.json();
+  // If we get user data back, the token is valid
+  return data.users && data.users.length > 0;
+}
+
+/**
  * Handles the actual communication with the OpenRouter AI model.
  *
  * @param {string} prompt - The user's input prompt for the AI.
@@ -91,6 +117,20 @@ export default async function handler(req) {
   }
 
   try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return createJsonResponse(
+        { error: "Missing or invalid authorization header" },
+        401
+      );
+    }
+
+    const idToken = authHeader.split("Bearer ")[1];
+    const isValid = await verifyFirebaseToken(idToken);
+    if (!isValid) {
+      return createJsonResponse({ error: "Unauthorized: Invalid token" }, 401);
+    }
+
     // Parse and validate the incoming JSON body
     let prompt;
     try {
@@ -109,8 +149,6 @@ export default async function handler(req) {
     return createJsonResponse({ result: aiText }, 200);
   } catch (error) {
     console.error("Server Error:", error);
-    // If it's a known error from our fetch helper, we return that message.
-    // Otherwise, we provide a generic fallback message.
     const errorMessage =
       error instanceof Error ? error.message : "Internal server error";
     return createJsonResponse({ error: errorMessage }, 500);

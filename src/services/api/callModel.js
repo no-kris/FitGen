@@ -2,7 +2,7 @@ import extractJsonFromText from "../../utils/extractJsonFromText";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "/api/callModel";
 
-const callModel = async (prompt) => {
+const callModel = async (prompt, token) => {
   let lastError = null;
 
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -11,6 +11,7 @@ const callModel = async (prompt) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ prompt }),
       });
