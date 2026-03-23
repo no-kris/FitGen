@@ -5,7 +5,7 @@ const generateNextWeekPlan = async (profile, plan, history, feedback) => {
   const lastWeek = plan.weeks[plan.weeks.length - 1];
   const nextWeekNumber = lastWeek.weekNumber + 1;
   const days = profile.selectedDays.join(", ");
-  const recentHistory = history
+  const recentHistory = (history || [])
     .slice(-10)
     .map(
       (log) =>
