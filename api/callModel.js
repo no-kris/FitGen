@@ -22,8 +22,13 @@ async function fetchAIResponse(prompt) {
       Authorization: `Bearer ${OPENROUTER_API_KEY}`,
     },
     body: JSON.stringify({
-      model: process.env.MODEL,
+      models: [
+        process.env.MODEL,
+        process.env.MODEL_FALLBACK_1,
+        process.env.MODEL_FALLBACK_2,
+      ].filter(Boolean),
       messages: [{ role: "user", content: prompt }],
+      route: "fallback",
     }),
   });
 
