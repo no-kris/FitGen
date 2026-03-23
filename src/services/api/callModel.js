@@ -39,6 +39,10 @@ const callModel = async (prompt, token) => {
 
       const cleanedJson = extractJsonFromText(data.result);
 
+      if (!cleanedJson) {
+        throw new Error("Failed to parse AI response into valid JSON");
+      }
+
       return cleanedJson;
     } catch (error) {
       lastError = error;
