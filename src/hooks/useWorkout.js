@@ -60,7 +60,11 @@ export function useWorkout() {
     const savedState = localStorage.getItem("fitgen-active");
     if (savedState) {
       const parsed = JSON.parse(savedState);
-      setActiveWorkout({ ...day, logs: parsed.logs, elapsed: parsed.elapsed });
+      const syncedLogs = parsed.logs.map((log, index) => ({
+        ...log,
+        name: day.exercises[index]?.name || log.name,
+      }));
+      setActiveWorkout({ ...day, logs: syncedLogs, elapsed: parsed.elapsed });
     } else {
       setActiveWorkout(day);
     }
