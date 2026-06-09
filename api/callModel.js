@@ -12,23 +12,18 @@ export const config = {
  * @throws {Error} If the API key is missing, the fetch fails, or the response is invalid.
  */
 async function fetchAIResponse(prompt) {
-  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+  const PROVIDER_API_KEY = process.env.PROVIDER_API_KEY;
   const API_URL = process.env.API_URL;
 
   const response = await fetch(API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      Authorization: `Bearer ${PROVIDER_API_KEY}`,
     },
     body: JSON.stringify({
-      models: [
-        process.env.MODEL,
-        process.env.MODEL_FALLBACK_1,
-        process.env.MODEL_FALLBACK_2,
-      ].filter(Boolean),
+      model: process.env.MODEL,
       messages: [{ role: "user", content: prompt }],
-      route: "fallback",
     }),
   });
 
