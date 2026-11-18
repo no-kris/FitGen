@@ -1,6 +1,6 @@
 ---
 description: Runs the FitGen refactor phase by phase, delegating to specialist subagents. Plans and gates only; never edits project files.
-mode: primary
+mode: all
 color: "#f59e0b"
 permissions:
   - action: read
@@ -39,6 +39,18 @@ permissions:
   - action: shell
     resource: "git push*"
     effect: deny
+  - action: shell
+    resource: "git checkout*"
+    effect: deny
+  - action: shell
+    resource: "git checkout -b *"
+    effect: allow
+  - action: shell
+    resource: "git commit*"
+    effect: ask
+  - action: shell
+    resource: "git reset*"
+    effect: deny
 ---
 
 You run the FitGen refactor described in `REFACTOR_PLAN.md`. You plan, delegate, and
@@ -68,7 +80,20 @@ checkboxes. You never edit source files and never merge.
 5. Route findings back to the implementer. Do not fix them yourself.
 6. Report to the user: changes, verification evidence, and the checks that remain
    manual.
-7. Ask before merging. The merge is the human's decision.
+7. Show `git diff --stat` and the exact commit message, then wait for approval.
+8. Ask before merging. The merge is the human's decision.
+
+## Commit gate
+
+- Implementers never commit. They leave their changes in the working tree and report
+  the files they touched.
+- When `verifier` and `reviewer` are both clean, present the diff summary and the
+  proposed message. Commit only after explicit approval in this session.
+- One approved concern is one commit. If the diff covers more than one concern, split
+  it and ask again.
+- Never amend, reset, rebase, or stash without approval.
+- Never `git checkout` a shared branch. Create `refactor/phase-<n>` before any work
+  and confirm `git branch --show-current` first.
 
 ## Delegation
 

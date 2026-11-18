@@ -9,6 +9,18 @@ permissions:
   - action: shell
     resource: "git push*"
     effect: deny
+  - action: shell
+    resource: "git commit*"
+    effect: deny
+  - action: shell
+    resource: "git checkout*"
+    effect: deny
+  - action: shell
+    resource: "git switch*"
+    effect: deny
+  - action: shell
+    resource: "git reset*"
+    effect: deny
   - action: subagent
     resource: "*"
     effect: deny
