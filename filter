@@ -1,0 +1,23 @@
+# --- Agent (OpenCode) ---
+(^|\.)opencode\.ai$
+(^|\.)models\.dev$
+
+# --- App AI provider: api/callModel.js (Groq) ---
+(^|\.)groq\.com$
+
+# --- Agent providers (OpenCode) ---
+(^|\.)openrouter\.ai$
+(^|\.)openai\.com$
+(^|\.)anthropic\.com$
+
+# --- Google APIs: Firebase ID-token verification in api/_utils.js ---
+(^|\.)googleapis\.com$
+
+# --- npm / git ---
+(^|\.)npmjs\.org$
+(^|\.)npmjs\.com$
+(^|\.)github\.com$
+(^|\.)githubusercontent\.com$
+
+# --- Vercel CLI, only if you add `vercel dev` ---
+(^|\.)vercel\.com$
