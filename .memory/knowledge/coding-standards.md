@@ -15,6 +15,7 @@ A change is done when all of these hold:
 
 - `npx eslint src api` exits 0
 - `npm run build` succeeds
+- `npm test` exits 0 (see `testing.md`)
 - No new instances of the debt listed at the bottom
 - The manual smoke path still works: onboarding -> generate -> start workout -> finish -> next week
 - The diff contains no unrelated reformatting or renames
@@ -154,10 +155,7 @@ function that consumes plan data.
 
 ## Tests
 
-No runner today. When one is added, use Vitest + React Testing Library, colocate
-`*.test.jsx` beside the source, and expose `npm test`. Best first targets:
-`utils/extractJsonFromText`, `utils/planSchema`, the prompt builders, and the plan
-mutations in `hooks/useWorkout`.
+`testing.md` owns the runner, layout, required cases, and CI.
 
 ## Known debt (do not expand)
 

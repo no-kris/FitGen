@@ -8,12 +8,14 @@ task needs. Entries are newest first within each section.
 1. `.memory/SCOPE.md` - the rules for this memory
 2. this file - what exists
 3. `.memory/knowledge/coding-standards.md` - before touching code
+4. `.memory/knowledge/testing.md` - before adding or changing tests
 
 ## Knowledge
 
 | Path | Covers | Status | Updated |
 | --- | --- | --- | --- |
-| `knowledge/coding-standards.md` | Style, domain contract, Definition of Done, refactor protocol | active | 2026-11-18 |
+| `knowledge/coding-standards.md` | Style, domain contract, Definition of Done, refactor protocol | active | 2026-11-19 |
+| `knowledge/testing.md` | Runner, layout, required cases, isolation, CI | active | 2026-11-19 |
 
 ## Projects
 
