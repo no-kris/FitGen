@@ -210,3 +210,10 @@ Some people are probably partway through a program as guests. Options:
 | 5 | — | 2 days |
 | 6 | 4 | 1–2 days |
 | 7 | ongoing; rules tests after 0 | 1–2 days |
+
+### Notes for running this plan
+
+- Phase 0 is human work. Have the recorded Firestore error and the committed `firestore.rules` and `firebase.json` before starting Phase 1.
+- Phases 1 and 2 both touch `App.jsx`, `hooks/useAuthObserver.js`, and `components/screens/ProfileScreen.jsx`. Finish Phase 1 first, or run Phase 2 in its own git worktree.
+- Phase 5 is independent of Phase 4 and can run in a parallel worktree.
+- Phase 7 runs alongside the others: add tests as each phase lands.
