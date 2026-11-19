@@ -76,12 +76,27 @@ checkboxes. You never edit source files and never merge.
 2. Create branch `refactor/phase-<n>` off the current main. Never work on `main`.
 3. Delegate to the owning agent, including: phase number, the exact task-list items,
    the files it may touch, and the acceptance criteria.
-4. When the implementer reports, launch `verifier`, then `reviewer`.
-5. Route findings back to the implementer. Do not fix them yourself.
-6. Report to the user: changes, verification evidence, and the checks that remain
+4. Forward the upstream `HANDOFF` block verbatim. Never paraphrase it: the next agent
+   starts with fresh context and has only your message.
+5. When the implementer reports, launch `verifier`, then `reviewer`.
+6. Route findings back to the implementer. Do not fix them yourself.
+7. Report to the user: changes, verification evidence, and the checks that remain
    manual.
-7. Show `git diff --stat` and the exact commit message, then wait for approval.
-8. Ask before merging. The merge is the human's decision.
+8. Show `git diff --stat` and the exact commit message, then wait for approval.
+9. Ask before merging. The merge is the human's decision.
+
+## Handoff protocol
+
+- Agents never talk to each other. You are the only channel: forward their `HANDOFF`
+  blocks verbatim, including `contract` and `open`.
+- No agent implements against a shape it was not handed. If a contract is missing, send
+  the task back to `data` or `domain` instead of letting the next agent invent one.
+- Order inside a phase: `data` -> `domain` -> `ui` -> `api` -> `tester`, then
+  `verifier` -> `reviewer`. Skip agents with nothing to do; never reorder the last two.
+- `status: blocked` or `needs-decision` stops the chain. Ask the human, then resume at
+  the agent that stopped it.
+- Findings from `reviewer` go to the agent named in its `open` field, with the findings
+  list attached unchanged.
 
 ## Commit gate
 

@@ -50,7 +50,23 @@ Read `.memory/knowledge/coding-standards.md` first, then Phase 7 of
 - Do not edit `src/**`, `api/**`, or `services/firebase/**` except to expose a
   function for testing, which you must report.
 
-## Report
+## Handoff
 
-Return: tests added, cases still uncovered, and the exact commands a human should run
-locally.
+End every report with this block, filled in literally.
+
+```text
+HANDOFF
+phase: <n>
+from: tester
+to: verifier
+status: done | blocked | needs-decision
+files: <paths you changed | none>
+contract: <new npm scripts and what each proves | none>
+evidence: <command -> result, or "not run">
+open: <cases still uncovered, and where a human must look | none>
+```
+
+- `contract` names the commands `verifier` should run, for example
+  `npm test -> 14 passed`.
+- `open` lists the gaps honestly. A test that only covers the happy path is a gap,
+  not coverage.

@@ -36,12 +36,31 @@ Run these, in order, and capture the result of each:
 4. `git diff --stat <phase-base-branch>...HEAD`
 5. `docker compose config --quiet` when Docker or env files changed
 
-## Report
+## Handoff
 
-One line per check with pass/fail. For failures, include only the first relevant error
-lines, not the whole log. Then list what a human must still verify by hand: the smoke
-path (onboarding -> generate -> start workout -> finish -> next week), offline
-behavior, and the second-device case. Keep the whole report under 30 lines.
+Run the checks, then end with this block. `reviewer` reads it instead of your log.
 
-If a command cannot run (missing dependency, no network), say so explicitly rather
-than guessing the outcome.
+```text
+HANDOFF
+phase: <n>
+from: verifier
+to: reviewer
+status: done | blocked
+files: none
+contract: none
+evidence: npx eslint src api -> clean; npm run build -> pass
+open: <manual checks remaining>
+```
+
+Rules for `evidence`:
+
+- One line per command, `command -> pass|fail`, keeping failures to the first
+  relevant error lines rather than the whole log.
+- If a command cannot run (missing dependency, no network), write
+  `command -> not run: <reason>`. Never guess the outcome.
+- `open` lists what a human must still verify: the smoke path (onboarding ->
+  generate -> start workout -> finish -> next week), offline behavior, and the
+  second-device case.
+- `status: blocked` only when a check failed in a way `reviewer` cannot assess.
+
+Keep the whole report under 30 lines.

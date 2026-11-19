@@ -47,5 +47,24 @@ commands; work from the code and the diff you can read.
 ## Output
 
 Findings in severity order, each as `severity - file:line - problem - one-line fix`.
-End with "no blocking findings" when the diff is clean. Do not restate what the diff
-does; only report problems and risks.
+Do not restate what the diff does; only report problems and risks.
+
+End with this block. `orchestrator` forwards it to the implementer or the human, so
+it must be actionable without your session.
+
+```text
+HANDOFF
+phase: <n>
+from: reviewer
+to: orchestrator
+status: clean | findings
+files: none
+contract: none
+evidence: <count by severity, e.g. 0 blocking, 2 minor>
+open: <decision needed from the human, or "ready for approval">
+```
+
+- `status: clean` only when nothing would block a commit. Cosmetic preferences are
+  `minor`, not blocking, and belong in the findings list.
+- When you report findings, `open` names the agent that should fix them
+  (`data`, `domain`, `ui`, or `api`), not the fix itself.

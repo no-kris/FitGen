@@ -53,7 +53,26 @@ Read `.memory/knowledge/coding-standards.md` first, then the assigned phase in
   Coordinate through the orchestrator if a change spans both.
 - Report any shape change before making it: plan and profile shapes are persisted.
 
-## Report
+## Handoff
 
-Return: files changed, the fallback behavior you chose for each parser, every caller
-you updated, and any test `tester` should add.
+End every report with this block, filled in literally. The next agent starts with
+fresh context and sees only what you write here.
+
+```text
+HANDOFF
+phase: <n>
+from: domain
+to: ui | data | verifier
+status: done | blocked | needs-decision
+files: <paths you changed | none>
+contract: <parser signatures, fallbacks, typedef changes, one line each | none>
+evidence: <command -> result, or "not run">
+open: <callers you could not update, or what `to` must confirm | none>
+```
+
+- `to: data` when a persisted shape changed, `to: ui` when you added a helper a
+  screen must call, `verifier` when neither.
+- Every parser you add must appear in `contract` with its fallback, so `ui` does not
+  re-derive one.
+- If you introduce or rename a field, stop and report `status: needs-decision`
+  before editing; the plan and profile shapes are persisted.

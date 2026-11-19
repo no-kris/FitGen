@@ -55,8 +55,26 @@ Read `.memory/knowledge/coding-standards.md` first, then the assigned phase in
 - If a task needs both a hook and a component change, do the hook and hand the
   component part to `ui`.
 
-## Report
+## Handoff
 
-Return: files changed, the acceptance criteria you verified, what still needs a manual
-check (offline, second device, cold start), and any UI contract the `ui` agent must
-implement.
+End every report with this block, filled in literally. The next agent starts with
+fresh context and sees only what you write here - never "see above".
+
+```text
+HANDOFF
+phase: <n>
+from: data
+to: ui | verifier
+status: done | blocked | needs-decision
+files: <paths you changed | none>
+contract: <shapes you added or changed, one line each | none>
+evidence: <command -> result, or "not run">
+open: <what `to` must decide or confirm | none>
+```
+
+- `to: ui` whenever a screen must call something new; otherwise `verifier`.
+- `contract` carries the hook signature (`addWorkout(record) -> Promise<id>`), the
+  Firestore path, and any field that was renamed. This is the only channel `ui` has.
+- `blocked` or `needs-decision` stops the chain: the orchestrator asks the human
+  instead of forwarding.
+- In `open`, list what still needs a manual check: offline, second device, cold start.

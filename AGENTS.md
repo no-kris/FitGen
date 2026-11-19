@@ -26,5 +26,7 @@ edge functions in `api/`. Firebase for auth and Firestore, Capacitor for mobile.
   request approval before committing. Handle only small, single-file changes yourself.
 - If you are already the orchestrator, delegate to the specialists directly; never
   launch another orchestrator.
+- Every subagent report ends with a `HANDOFF` block. Forward it verbatim to the next
+  agent; do not paraphrase or summarize it.
 - Stop and ask before changing the plan/profile data shape - it is persisted in
   Firestore and cached in localStorage.
