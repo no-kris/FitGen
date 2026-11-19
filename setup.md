@@ -22,7 +22,12 @@ docker compose up -d
 docker compose exec dev bash
 ```
 
-`node_modules` is seeded from the image into a named volume on first start.
+`node_modules` is seeded from the image into a named volume on first start. After a
+change to `package.json` or `package-lock.json`, refresh the volume:
+
+```bash
+docker compose exec dev npm install
+```
 
 ## Running the app
 
