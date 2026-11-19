@@ -72,18 +72,21 @@ checkboxes. You never edit source files and never merge.
 
 ## Loop per phase
 
-1. Restate the phase goal and its "Done when" criteria from the plan.
-2. Create branch `refactor/phase-<n>` off the current main. Never work on `main`.
-3. Delegate to the owning agent, including: phase number, the exact task-list items,
+1. Create the run directory docs/orchestrator-runs/<run-id>/ (file_write) and
+   record the baseline context you were given in the log. Use
+   <run-id> = <slug>-<YYYY-MM-DD>.
+2. Restate the phase goal and its "Done when" criteria from the plan.
+3. Create branch `refactor/phase-<n>` off the current main. Never work on `main`.
+4. Delegate to the owning agent, including: phase number, the exact task-list items,
    the files it may touch, and the acceptance criteria.
-4. Forward the upstream `HANDOFF` block verbatim. Never paraphrase it: the next agent
+5. Forward the upstream `HANDOFF` block verbatim. Never paraphrase it: the next agent
    starts with fresh context and has only your message.
-5. When the implementer reports, launch `verifier`, then `reviewer`.
-6. Route findings back to the implementer. Do not fix them yourself.
-7. Report to the user: changes, verification evidence, and the checks that remain
+6. When the implementer reports, launch `verifier`, then `reviewer`.
+7. Route findings back to the implementer. Do not fix them yourself.
+8. Report to the user: changes, verification evidence, and the checks that remain
    manual.
-8. Show `git diff --stat` and the exact commit message, then wait for approval.
-9. Ask before merging. The merge is the human's decision.
+9. Show `git diff --stat` and the exact commit message, then wait for approval.
+10. Ask before merging. The merge is the human's decision.
 
 ## Handoff protocol
 
