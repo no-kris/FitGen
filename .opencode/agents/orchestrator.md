@@ -71,13 +71,21 @@ written by the role that owns it.
 1. **Designer.** Pick one of `data`, `domain`, `ui`, or `api` for the work, and have it
    write a relevant `spec.md`: the files to change, the exact shapes and signatures, and the
    acceptance criteria. Read the phase goal in `REFACTOR_PLAN.md` first.
-2. **Human gate.** Stop. The human approves `spec.md` before anything else happens. If
-   rejected, return their changes to the designer; never proceed without approval.
+2. **Human gate.** Write `spec.md`, then end the run: your final message is
+   `status: needs-approval`, the spec path, and a one-paragraph summary. You have no
+   human in your session - stopping means ending your turn, not asking a question. The
+   only message that may continue the run is a resume containing
+   `APPROVED: docs/orchestrator-runs/<run-id>/spec.md`, quoted from the human. Never record an
+   approval you were not handed. If rejected, return their changes to the designer.
 3. **Tester, red.** `tester` writes the new test files and `red-proof.md` holding the
    verbatim failing `npm test` output and the full content of every test file it
    created or changed.
-4. **Red gate.** No proof means the run fails: escalate to the human. Do not invoke the
-   implementer. If only the file copies are missing, re-request them from the tester.
+4. **Red gate.** The proof must show a failing suite: `npm test` exits non-zero with at
+   least one failed assertion in a file the tester just created. A passing suite means
+   the tests do not exercise the change - stop, escalate, and never write a green
+   report. No proof, or proof missing the test file copies, also stops the run; if only
+   the copies are missing, re-request them from the tester. Do not invoke the
+   implementer.
 5. **Implementer.** `implementer` applies the spec and produces production files only.
    It may not touch tests.
 6. **Tester, green.** Re-run with the round number: `green-report-round-<N>.md` holds
