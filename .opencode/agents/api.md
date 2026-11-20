@@ -6,6 +6,9 @@ permissions:
   - action: read
     resource: "*.env"
     effect: deny
+  - action: read
+    resource: ".opencode/agents/*"
+    effect: deny
   - action: edit
     resource: "*"
     effect: deny
@@ -74,19 +77,9 @@ Write `docs/orchestrator-runs/<run-id>/api-spec.md` containing:
 
 ## Handoff
 
-End every report with this block, filled in literally.
-
-```text
-HANDOFF
-phase: <n>
-from: api
-to: implementer
-status: done | blocked | needs-decision
-files: docs/orchestrator-runs/<run-id>/spec.md
-contract: <endpoint -> request body -> response body -> status codes | none>
-evidence: <files you read; commands you ran, or "read only">
-open: <client changes ui must design, deployment notes | none>
-```
+End every report with the `HANDOFF` block defined in `AGENTS.md`, with `from: api`,
+`to: implementer`, `files:` naming the spec you wrote, and `contract:` carrying each
+endpoint's request body, response body, and status codes.
 
 `blocked` or `needs-decision` stops the run for a human decision; the implementer is
 not invoked.

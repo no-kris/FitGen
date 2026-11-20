@@ -6,6 +6,9 @@ permissions:
   - action: read
     resource: "*.env"
     effect: deny
+  - action: read
+    resource: ".opencode/agents/*"
+    effect: deny
   - action: edit
     resource: "*.test.js"
     effect: deny
@@ -75,19 +78,10 @@ You receive an approved spec and you edit the code to match the requirements def
 
 ## Handoff
 
-End every report with this block, filled in literally.
-
-```text
-HANDOFF
-phase: <n>
-from: implementer
-to: tester
-status: done | blocked | needs-decision
-files: <production paths you changed | none>
-contract: <signatures or shapes you had to decide, one line each | none>
-evidence: npm test -> <pass/fail>; npx eslint src api -> <clean/errors>
-open: <anything the spec left ambiguous, or "none">
-```
+End every report with the `HANDOFF` block defined in `AGENTS.md`, with
+`from: implementer`, `to: tester`, `files:` listing the production paths you changed,
+`contract:` naming any signature or shape you had to decide, and `evidence:` holding
+the `npm test` and `npx eslint src api` results.
 
 - `blocked` or `needs-decision` stops the run: the orchestrator asks the human.
 - `open` must be empty when you followed the spec exactly.

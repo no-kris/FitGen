@@ -3,6 +3,9 @@ description: Runs lint, tests, build, and config checks for a run and writes ver
 mode: subagent
 color: "#14b8a6"
 permissions:
+  - action: read
+    resource: ".opencode/agents/*"
+    effect: deny
   - action: edit
     resource: "*"
     effect: deny
@@ -65,19 +68,9 @@ diff summary the orchestrator records in `log.md`.
 
 ## Handoff
 
-End with this block. The orchestrator reads it instead of your session.
-
-```text
-HANDOFF
-phase: <n>
-from: verifier
-to: orchestrator
-status: done | blocked
-files: docs/orchestrator-runs/<run-id>/verification.md
-contract: none
-evidence: npx eslint src api -> pass; npm run build -> pass; git status -> <clean/dirty>
-open: <manual checks remaining>
-```
+End with the `HANDOFF` block defined in `AGENTS.md`, with `from: verifier`,
+`to: orchestrator`, `files:` naming `verification.md`, and `evidence:` holding one
+`command -> pass|fail` line per check.
 
 - `open` lists what a human must still verify: the smoke path (onboarding -> generate ->
   start workout -> finish -> next week), offline behavior, and the second-device case.

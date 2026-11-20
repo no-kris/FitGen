@@ -6,6 +6,9 @@ permissions:
   - action: read
     resource: "*.env"
     effect: deny
+  - action: read
+    resource: ".opencode/agents/*"
+    effect: deny
   - action: edit
     resource: "*"
     effect: deny
@@ -76,19 +79,9 @@ Write `docs/orchestrator-runs/<run-id>/data-spec.md` containing:
 
 ## Handoff
 
-End every report with this block, filled in literally.
-
-```text
-HANDOFF
-phase: <n>
-from: data
-to: implementer
-status: done | blocked | needs-decision
-files: docs/orchestrator-runs/<run-id>/spec.md
-contract: <Firestore paths, document shapes, function signatures>
-evidence: <files you read; commands you ran, or "read only">
-open: <decisions the human must approve, or "none">
-```
+End every report with the `HANDOFF` block defined in `AGENTS.md`, with `from: data`,
+`to: implementer`, `files:` naming the spec you wrote, and `contract:` carrying the
+Firestore paths, document shapes, and function signatures.
 
 `blocked` or `needs-decision` stops the run for a human decision; the implementer is
 not invoked.

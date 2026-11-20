@@ -6,6 +6,9 @@ permissions:
   - action: read
     resource: "*.env"
     effect: deny
+  - action: read
+    resource: ".opencode/agents/*"
+    effect: deny
   - action: edit
     resource: "*"
     effect: deny
@@ -109,18 +112,8 @@ are unchanged, report the failure; the orchestrator starts the next round.
 
 ## Handoff
 
-End every report with this block, filled in literally.
-
-```text
-HANDOFF
-phase: <n>
-from: tester
-to: orchestrator
-status: done | blocked | needs-decision
-files: <test files and run artifacts you wrote | none>
-contract: <npm test -> red: <n> failing / green: <n> passing>
-evidence: npm test -> <exit code>; red-proof.md -> <written/missing>
-open: <failing tests that expose bugs, product changes needed for testability, gaps | none>
-```
+End every report with the `HANDOFF` block defined in `AGENTS.md`, with `from: tester`,
+`to: orchestrator`, `files:` listing the test files and run artifacts you wrote, and
+`evidence:` holding the `npm test` exit code and whether `red-proof.md` was written.
 
 `blocked` or `needs-decision` stops the run for a human decision.

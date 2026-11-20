@@ -3,6 +3,9 @@ description: Read-only review of a run's diff against the coding standards, the 
 mode: subagent
 color: "#eab308"
 permissions:
+  - action: read
+    resource: ".opencode/agents/*"
+    effect: deny
   - action: edit
     resource: "*"
     effect: deny
@@ -71,19 +74,9 @@ Write `docs/orchestrator-runs/<run-id>/review.md`. Findings in severity order, e
 `severity - file:line - problem - one-line fix`. Do not restate what the diff does; only
 report problems and risks, and give a verdict line at the top: `PASS` or `REJECT`.
 
-End with this block so the orchestrator can route the findings exactly.
-
-```text
-HANDOFF
-phase: <n>
-from: reviewer
-to: orchestrator
-status: pass | reject | blocked
-files: docs/orchestrator-runs/<run-id>/review.md
-contract: none
-evidence: <verdict>; <count by severity, e.g. 0 blocking, 2 minor>
-open: <who must act on each blocking finding: implementer, tester, or the designer | none>
-```
+End with the `HANDOFF` block defined in `AGENTS.md`, with `from: reviewer`,
+`to: orchestrator`, `files:` naming `review.md`, `status:` one of `pass`, `reject`, or
+`blocked`, and `open:` naming who must act on each blocking finding.
 
 - `status: pass` only when nothing would block a commit. Cosmetic preferences are
   `minor`, not blocking, and belong in the findings list.
