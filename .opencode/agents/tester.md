@@ -76,21 +76,26 @@ The orchestrator calls you before the implementer, with the approved spec.
 1. Write the new test files the spec's acceptance criteria require.
 2. Run `npm test`. It MUST fail, and it must fail on the new assertions, not on a
    syntax or import error.
-3. Write `red-proof.md` holding, verbatim: the full failing `npm test` output, and the
-   complete content of every test file you created or changed in this stage.
+3. Write `red-proof.md` with: the `npm test` exit code, the `Test Files` and `Tests`
+   summary lines, one `failed:` line per failing file with its failing count, and a
+   `frozen:` hash table made with `git hash-object <path>` for every test file you
+   created or changed. Do not quote test names or assertion text; the implementer runs
+   the suite itself.
 
-That copy is the contract for the green gate. Nobody, including you, may edit those
-files afterwards. If a test is wrong, say so in your handoff and let the human decide -
-do not fix it silently and do not weaken the assertion.
+The hash table is the contract for the green gate. Nobody, including you, may edit
+those files afterwards. If a test is wrong, say so in your handoff and let the human
+decide - do not fix it silently and do not weaken the assertion.
 
 ## Stage 2 - green
 
 The orchestrator calls you again after each implementer build, with a round number.
 
-1. Run `npm test` and capture the output verbatim.
-2. Compare every test file against the copy in `red-proof.md`, byte for byte.
-3. Write `green-report-round-<N>.md` with the output, the per-file comparison, and any
-   test file that appeared outside the red proof.
+1. Run `npm test` and capture the exit code and summary lines.
+2. Recompute `git hash-object` for every path in the red proof's `frozen:` table and
+   compare: `HOLD` when it matches, `CHANGED` when it does not.
+3. List any test file that is not in the red proof (`added:`) or no longer exists
+   (`removed:`).
+4. Write `green-report-round-<N>.md` with those results.
 
 Never edit a test to make the suite pass. If the suite is still red and the test files
 are unchanged, report the failure; the orchestrator starts the next round.

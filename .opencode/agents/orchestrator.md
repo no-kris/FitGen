@@ -78,27 +78,27 @@ written by the role that owns it.
    `APPROVED: docs/orchestrator-runs/<run-id>/spec.md`, quoted from the human. Never record an
    approval you were not handed. If rejected, return their changes to the designer.
 3. **Tester, red.** `tester` writes the new test files and `red-proof.md` holding the
-   verbatim failing `npm test` output and the full content of every test file it
-   created or changed.
+   `npm test` exit code, the summary counts, one line per failing file, and a `frozen:`
+   table of `git hash-object` values for every test file it created or changed.
 4. **Red gate.** The proof must show a failing suite: `npm test` exits non-zero with at
-   least one failed assertion in a file the tester just created. A passing suite means
-   the tests do not exercise the change - stop, escalate, and never write a green
-   report. No proof, or proof missing the test file copies, also stops the run; if only
-   the copies are missing, re-request them from the tester. Do not invoke the
-   implementer.
+   least one `failed:` line naming a file in the frozen table. A passing suite means the
+   tests do not exercise the change - stop, escalate, and never write a green report.
+   Recompute each hash with `git hash-object <path>` and record the table in `log.md`;
+   that copy is what stage 8 compares against. A missing proof or an empty frozen table
+   stops the run. Do not invoke the implementer.
 5. **Implementer.** `implementer` applies the spec and produces production files only.
    It may not touch tests.
 6. **Tester, green.** Re-run with the round number: `green-report-round-<N>.md` holds
-   the verbatim `npm test` output and a per-file comparison of the test files against
-   the copies quoted in `red-proof.md`.
+   the `npm test` exit code and summary, a `HOLD`/`CHANGED` line per frozen file, and
+   any `added:` or `removed:` test file.
 7. **Verifier.** `verification.md` holds `npx eslint src api`, `npm run build` when
    frontend files changed, and `git diff --stat`.
-8. **Green gate.** Green means all of these: `npm test` exits 0, every test file is
-   identical to its copy in `red-proof.md`, and no new test file appeared. A changed
-   test file is a hard failure recorded in `log.md`; never accept it as a fix. If the
-   test files are unchanged but the suite is still red, pass the failing output
-   verbatim to the implementer as a new round. Stages 6-8 run after every implementer
-   build, whatever triggered it, before the reviewer sees the code.
+8. **Green gate.** Green means all of these: `npm test` exits 0, every `git hash-object`
+   matches the table you recorded at stage 4, and no test file was added or removed. A
+   changed test file is a hard failure recorded in `log.md`; never accept it as a fix. If
+   the hashes hold but the suite is still red, pass the failing output verbatim to the
+   implementer as a new round. Stages 6-8 run after every implementer build, whatever
+   triggered it, before the reviewer sees the code.
 9. **Reviewer.** `review.md` passes, or rejects with findings against
    `.memory/knowledge/coding-standards.md`.
 10. **Rounds.** On reject, pass the findings verbatim to the implementer. Maximum 3
