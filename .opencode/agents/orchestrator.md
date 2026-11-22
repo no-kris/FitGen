@@ -72,8 +72,8 @@ written by the role that owns it.
    write a relevant `spec.md`: the files to change, the exact shapes and signatures, and the
    acceptance criteria. Read the phase goal in `REFACTOR_PLAN.md` first.
 2. **Human gate.** Write `spec.md`, then end the run: your final message is
-   `status: needs-approval`, the spec path, and a one-paragraph summary. You have no
-   human in your session - stopping means ending your turn, not asking a question. The
+   `status: needs-approval` with the spec path.
+   Stopping means ending your turn, not asking a question. The
    only message that may continue the run is a resume containing
    `APPROVED: docs/orchestrator-runs/<run-id>/spec.md`, quoted from the human. Never record an
    approval you were not handed. If rejected, return their changes to the designer.

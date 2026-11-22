@@ -3,5 +3,21 @@
   "instructions": [
     ".memory/SCOPE.md",
     ".memory/knowledge/*.md"
-  ]
+  ],
+  "agents": {
+    "build": {
+      "permissions": [
+        {
+          "action": "read",
+          "resource": ".opencode/agents/*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "docs/orchestrator-runs/*",
+          "effect": "deny"
+        }
+      ]
+    }
+  }
 }
