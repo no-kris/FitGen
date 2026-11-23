@@ -27,7 +27,7 @@ export default function ProfileSetupForm() {
     setIsGenerating(true);
     try {
       const plan = await generateInitialPlan(formData);
-      onSavePlan(plan, formData);
+      await onSavePlan(plan, formData);
     } catch (error) {
       setErrors({ error: error.message });
     } finally {

@@ -5,7 +5,11 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import { defineConfig, globalIgnores } from "eslint/config";
 
 export default defineConfig([
-  globalIgnores(["dist"]),
+  // Generated bundles copied into the native projects by `npx cap sync`
+  globalIgnores([
+    "dist",
+    "ios/App/App/public",
+  ]),
   {
     files: ["**/*.{js,jsx}"],
     extends: [

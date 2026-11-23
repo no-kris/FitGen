@@ -1,0 +1,10 @@
+node_modules
+dist
+dist-ssr
+.git
+.vercel
+android
+ios
+coverage
+*.log
+.env*

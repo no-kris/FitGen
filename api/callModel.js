@@ -1,66 +1,43 @@
-export default async function handler(req, res) {
-  // CORS headers for Capacitor (Mobile) and Localhost (Dev)
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+import { withAuth, createJsonResponse } from "./_utils.js";
 
-  // Handle preflight OPTIONS request
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
+export const config = {
+  runtime: "edge",
+};
 
-  // Only allow POST
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+/**
+ * Handles the actual communication with the OpenRouter AI model.
+ *
+ * @param {string} prompt - The user's input prompt for the AI.
+ * @returns {Promise<string>} The generated text response from the AI.
+ * @throws {Error} If the API key is missing, the fetch fails, or the response is invalid.
+ */
+async function fetchAIResponse(prompt) {
+  const PROVIDER_API_KEY = process.env.PROVIDER_API_KEY;
+  const API_URL = process.env.API_URL;
 
-  const { prompt } = req.body;
+  const response = await fetch(API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${PROVIDER_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: process.env.MODEL,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
 
-  if (!prompt) {
-    return res.status(400).json({ error: "Prompt is required" });
-  }
-
-  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-  const MODEL = "google/gemma-3-27b-it:free";
-  const API_URL = "https://openrouter.ai/api/v1/chat/completions";
-
-  if (!OPENROUTER_API_KEY) {
-    return res.status(500).json({ error: "Server configuration error" });
-  }
-
-  try {
-    const response = await fetch(API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("OpenRouter Error:", errorText);
-      return res
-        .status(response.status)
-        .json({ error: "Failed to fetch from AI model" });
-    }
-
-    const data = await response.json();
-    const text = data.choices[0].message.content;
-
-    if (!text) {
-      return res.status(500).json({ error: "No text received from AI" });
-    }
-
-    // Return the raw text back to the client.
-    // The client will handle extracting the JSON.
-    return res.status(200).json({ result: text });
-  } catch (error) {
-    console.error("Server Error:", error);
-    return res.status(500).json({ error: "Internal server error" });
-  }
+  if (!response.ok) throw new Error(await response.text());
+  const data = await response.json();
+  return data.choices[0].message.content;
 }
+
+// The handler only cares about the prompt and calling the AI
+export default withAuth(async (body) => {
+  if (!body.prompt) {
+    return createJsonResponse({ error: "Prompt is required" }, 400);
+  }
+
+  const aiText = await fetchAIResponse(body.prompt);
+  return createJsonResponse({ result: aiText }, 200);
+});

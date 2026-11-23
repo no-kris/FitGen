@@ -1,0 +1,58 @@
+name: fit-gen-v2
+
+networks:
+  fit-gen-net:
+    internal: true          # no route out; all egress must use the proxy
+    ipam:
+      config:
+        - subnet: 10.201.0.0/24
+  fit-gen-egress:
+    driver: bridge          # tinyproxy's path to the internet
+
+services:
+  proxy:
+    image: vimagick/tinyproxy
+    restart: unless-stopped
+    volumes:
+      - ./tinyproxy.conf:/etc/tinyproxy/tinyproxy.conf:ro
+      - ./filter:/etc/tinyproxy/filter:ro
+    networks:
+      - fit-gen-net
+      - fit-gen-egress
+
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fit-gen-dev
+    init: true
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - fit-gen-node-modules:/workspace/node_modules
+      # Dedicated container-isolated volume for Antigravity credentials
+      - antigravity-config:/root/.gemini
+      # Optional hardening: keep .env visible but unwritable to the agent
+      # - ./.env:/workspace/.env:ro
+    ports:
+      - "5173:5173"
+    env_file:
+      - .env                # VITE_*, PROVIDER_API_KEY, API_URL, MODEL*
+    environment:
+      HTTP_PROXY: http://proxy:8888
+      HTTPS_PROXY: http://proxy:8888
+      http_proxy: http://proxy:8888
+      https_proxy: http://proxy:8888
+      NO_PROXY: localhost,127.0.0.1,::1,proxy
+      NODE_USE_ENV_PROXY: "1"   # makes Node's built-in fetch honor the proxy
+    networks:
+      - fit-gen-net
+    depends_on:
+      - proxy
+    stdin_open: true
+    tty: true
+    command: ["bash"]
+
+volumes:
+  fit-gen-node-modules:
+  antigravity-config:

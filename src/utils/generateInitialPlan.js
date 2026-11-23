@@ -1,4 +1,5 @@
 import callModel from "../services/api/callModel";
+import getUserToken from "./getUserToken";
 
 const generateInitialPlan = async (formData) => {
   const days = formData.selectedDays.join(", ");
@@ -64,19 +65,19 @@ const generateInitialPlan = async (formData) => {
           "coachNotes": "Coach note for week 1 (e.g., 'System: Profile Analyzed. Exclusions Applied. Generating Optimal Sequence.').",
           "schedule": [
             {
-              "dayNumber": 1, 
-              "dayName": "Monday", 
-              "focus": "Primary Focus (e.g., Push, Pull, Legs, Upper Body)", 
-              "exercises": [ 
-                { 
-                  "name": "Exercise Name", 
-                  "sets": 3, 
-                  "reps": "8-12", 
-                  "rest": "60s", 
-                  "notes": "Keep chest up and core tight.", 
-                  "alternatives": ["Exact Alt 1", "Exact Alt 2", "Exact Alt 3"] 
-                } 
-              ] 
+              "dayNumber": 1,
+              "dayName": "Monday",
+              "focus": "Primary Focus (e.g., Push, Pull, Legs, Upper Body)",
+              "exercises": [
+                {
+                  "name": "Exercise Name",
+                  "sets": 3,
+                  "reps": "8-12",
+                  "rest": "60s",
+                  "notes": "Keep chest up and core tight.",
+                  "alternatives": ["Exact Alt 1", "Exact Alt 2", "Exact Alt 3"]
+                }
+              ]
             }
           ]
         }
@@ -98,7 +99,8 @@ const generateInitialPlan = async (formData) => {
     }'. If user prioritizes "Legs", focus on leg exercises.
    `;
 
-  return callModel(prompt);
+  const token = await getUserToken();
+  return callModel(prompt, token);
 };
 
 export default generateInitialPlan;

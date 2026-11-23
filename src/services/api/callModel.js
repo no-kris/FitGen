@@ -2,7 +2,7 @@ import extractJsonFromText from "../../utils/extractJsonFromText";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "/api/callModel";
 
-const callModel = async (prompt) => {
+const callModel = async (prompt, token) => {
   let lastError = null;
 
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -11,12 +11,20 @@ const callModel = async (prompt) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ prompt }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to call backend API");
+        let errDesc = "Failed to call backend API";
+        try {
+          const errData = await response.json();
+          if (errData.error) errDesc = errData.error;
+        } catch {
+          // Ignore json parse error
+        }
+        throw new Error(errDesc);
       }
 
       const data = await response.json();
@@ -30,6 +38,10 @@ const callModel = async (prompt) => {
       }
 
       const cleanedJson = extractJsonFromText(data.result);
+
+      if (!cleanedJson) {
+        throw new Error("Failed to parse AI response into valid JSON");
+      }
 
       return cleanedJson;
     } catch (error) {

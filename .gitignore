@@ -10,7 +10,10 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+# Local environment (contains secrets - never commit)
+.env
 *.local
+*.production
 
 # Editor directories and files
 .vscode/*
@@ -32,3 +35,4 @@ ios
 
 # Icons
 icons
+.vercel

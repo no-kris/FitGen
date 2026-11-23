@@ -1,10 +1,8 @@
 import { Activity } from "lucide-react";
 import Button from "../../components/ui/Button";
-import { useAuth } from "../../hooks/useAuth";
 import { useAppContext } from "../../context/AppContext";
 
 export default function WelcomeScreen() {
-  const { handleGuestLogin } = useAuth({});
   const { setShowAuth } = useAppContext();
 
   return (
@@ -21,11 +19,6 @@ export default function WelcomeScreen() {
           text="Initialize Account"
           onClick={() => setShowAuth(true)}
           className="button btn-primary w-full font-bold text-lg uppercase p-4 letter-spacing-2"
-        />
-        <Button
-          text="Run as Guest?"
-          onClick={handleGuestLogin}
-          className="button btn-secondary w-full font-bold text-lg uppercase p-4 letter-spacing-2"
         />
       </div>
     </div>

@@ -29,6 +29,7 @@ button {
 
 button:disabled {
   opacity: 0.5;
+  cursor: not-allowed;
 }
 
 input,
@@ -92,22 +93,20 @@ input[type="number"] {
   min-height: min-content;
 }
 
-.guest-banner {
-  padding: 2rem;
-  padding-top: calc(var(--safe-top) + 2rem);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background-color: var(--bg-card);
-  border-bottom: 1px solid var(--border-color);
-}
-
 .card {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
   padding: 2rem;
   position: relative;
+}
+
+.alert-error {
+  background-color: var(--bg-card);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 1.2rem 1.6rem;
+  color: var(--danger);
 }
 
 .rest-timer-overlay {

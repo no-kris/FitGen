@@ -5,9 +5,15 @@ export default function Button({
   iconSize = 20,
   className = "button",
   disabled = false,
+  ...rest
 }) {
   return (
-    <button onClick={onClick} className={className} disabled={disabled}>
+    <button
+      onClick={onClick}
+      className={className}
+      disabled={disabled}
+      {...rest}
+    >
       {Icon && <Icon size={iconSize} />}
       {text}
     </button>

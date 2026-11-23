@@ -3,7 +3,6 @@ import { authService } from "../services/firebase/authServices";
 
 export function useAuthObserver(onLogout) {
   const [user, setUser] = useState(null);
-  const [isGuest, setIsGuest] = useState(false);
 
   const onLogoutRef = useRef(onLogout);
   useEffect(() => {
@@ -12,13 +11,22 @@ export function useAuthObserver(onLogout) {
 
   useEffect(() => {
     const unsubscribe = authService.subscribeToAuthChanges((currentUser) => {
-      if (currentUser) {
+      if (currentUser && !currentUser.isAnonymous) {
         setUser(currentUser);
-        setIsGuest(currentUser.isAnonymous);
+      } else if (currentUser && currentUser.isAnonymous) {
+        setUser(null);
+        if (onLogoutRef.current) {
+          onLogoutRef.current();
+        }
+        try {
+          Promise.resolve(authService.logout()).catch((error) => {
+            console.error("Failed to sign out anonymous user:", error);
+          });
+        } catch (error) {
+          console.error("Failed to sign out anonymous user:", error);
+        }
       } else {
         setUser(null);
-        // We do NOT change isGuest to false immediately here
-        // so that logout effects can check if the user WAS a guest.
         if (onLogoutRef.current) {
           onLogoutRef.current();
         }
@@ -27,5 +35,5 @@ export function useAuthObserver(onLogout) {
     return () => unsubscribe();
   }, []);
 
-  return { user, setUser, isGuest, setIsGuest };
+  return { user, setUser };
 }

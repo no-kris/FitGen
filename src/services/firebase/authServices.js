@@ -7,7 +7,6 @@ import {
   deleteUser,
   EmailAuthProvider,
   reauthenticateWithCredential,
-  signInAnonymously,
 } from "firebase/auth";
 import { auth } from "./firebaseHelper";
 
@@ -31,12 +30,6 @@ export const authService = {
       email,
       password
     );
-    return userCredential.user;
-  },
-
-  // Sign in as anonymous user
-  signInGuest: async () => {
-    const userCredential = await signInAnonymously(auth);
     return userCredential.user;
   },
 

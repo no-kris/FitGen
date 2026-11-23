@@ -6,28 +6,16 @@ import TextInput from "../ui/TextInput";
 import { useAuth } from "../../hooks/useAuth";
 import { useAppContext } from "../../context/AppContext";
 
-<<<<<<< HEAD
-export default function ProfileScreen({
-  profile,
-  onResetSystem,
-  isGuest,
-  onLogout,
-  onDeleteAccount,
-}) {
-  const [activeModal, setActiveModal] = useState(null); // 'reset' | 'report' | null
-=======
 export default function ProfileScreen() {
   const {
     userData,
     handleResetSystem: onResetSystem,
-    isGuest,
     user,
     clearStorage,
   } = useAppContext();
   const profile = userData.profile;
   const { handleLogout, handleDeleteAccount } = useAuth({ user, clearStorage });
   const [activeModal, setActiveModal] = useState(null); // 'reset' | 'report' | 'delete-account' | null
->>>>>>> iphone
   const [reportReason, setReportReason] = useState("");
 
   const Icon =
@@ -87,17 +75,15 @@ export default function ProfileScreen() {
             onClick={() => setActiveModal("reset")}
             className="button btn-danger w-full mb-4 text-2xl font-bold letter-spacing-2 p-3"
           />
-          {!isGuest && (
-            <Button
-              text="LOGOUT"
-              onClick={() => {
-                onLogout();
-              }}
-              icon={LogOut}
-              iconSize={20}
-              className="button btn-secondary w-full mb-4 text-2xl font-bold letter-spacing-2 p-3"
-            />
-          )}
+          <Button
+            text="LOGOUT"
+            onClick={() => {
+              handleLogout();
+            }}
+            icon={LogOut}
+            iconSize={20}
+            className="button btn-secondary w-full mb-4 text-2xl font-bold letter-spacing-2 p-3"
+          />
         </div>
 
         <div className="flex justify-between pb-4">
@@ -112,24 +98,11 @@ export default function ProfileScreen() {
             }
             className="text-success uppercase"
           />
-          {!isGuest && (
-            <Button
-<<<<<<< HEAD
-              text="PRIVACY POLICY"
-              onClick={() =>
-                window.open(
-                  "https://docs.google.com/document/d/e/2PACX-1vQIArxvMDxCVizYEzY1IgbwGab-v29NuDK43yi6oeIvZZxDmwIBbj_68wbUIsTdFOWQSC9sUbzSrdHX/pub",
-                  "_blank",
-                  "noopener,noreferrer"
-                )
-              }
-              className="text-success uppercase"
-=======
-              text="DELETE ACCOUNT"
-              onClick={() => setActiveModal("delete-account")}
-              className="text-error uppercase"
-            />
-          )}
+          <Button
+            text="DELETE ACCOUNT"
+            onClick={() => setActiveModal("delete-account")}
+            className="text-error uppercase"
+          />
           <Button
             text="File REPORT"
             onClick={() => setActiveModal("report")}
@@ -154,49 +127,10 @@ export default function ProfileScreen() {
               text="Cancel"
               onClick={() => setActiveModal(null)}
               className="button btn-muted w-full font-bold text-lg uppercase p-4 letter-spacing-2"
->>>>>>> iphone
             />
-            {!isGuest && (
-              <Button
-                text="Delete Account"
-                onClick={() => setActiveModal("delete-account")}
-                className="text-error uppercase"
-              />
-            )}
             <Button
-<<<<<<< HEAD
-              text="File REPORT"
-              onClick={() => setActiveModal("report")}
-              className="text-primary uppercase"
-=======
               text="I'm Sure"
               onClick={() => handleDeleteAccount()}
-              className="button btn-danger w-full font-bold text-lg uppercase p-4 letter-spacing-2"
->>>>>>> iphone
-            />
-          </div>
-        </div>
-      </Modal>
-
-      <Modal
-        isOpen={activeModal === "delete-account"}
-        onClose={() => setActiveModal(null)}
-        title="Delete Account"
-      >
-        <div className="flex flex-col gap-2">
-          <p className="text-lg">
-            Are you sure you want to delete your account? Once you delete your
-            account all your data will be erased.
-          </p>
-          <div className="flex justify-center w-full gap-2">
-            <Button
-              text="Cancel"
-              onClick={() => setActiveModal(null)}
-              className="button btn-muted w-full font-bold text-lg uppercase p-4 letter-spacing-2"
-            />
-            <Button
-              text="I'm Sure"
-              onClick={() => onDeleteAccount()}
               className="button btn-danger w-full font-bold text-lg uppercase p-4 letter-spacing-2"
             />
           </div>

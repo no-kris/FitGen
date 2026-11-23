@@ -1,30 +1,29 @@
 import callModel from "../services/api/callModel";
+import getUserToken from "./getUserToken";
 
 const generateNextWeekPlan = async (profile, plan, history, feedback) => {
   const lastWeek = plan.weeks[plan.weeks.length - 1];
   const nextWeekNumber = lastWeek.weekNumber + 1;
   const days = profile.selectedDays.join(", ");
-  const recentHistory = history
+  const recentHistory = (history || [])
     .slice(-10)
-    .map(
-      (log) =>
-        `${log.workout.focus}: ${
-          log.logs.length
-        } exercises completed. Duration: ${Math.floor(
-          log.duration / 60
-        )} minutes.`
-    )
+    .map((log) => {
+      const focus = log?.focus ?? log?.workout?.focus ?? "Workout";
+      const exerciseCount = Array.isArray(log?.logs) ? log.logs.length : 0;
+      const durationMinutes = Math.floor((log?.duration || 0) / 60);
+      return `${focus}: ${exerciseCount} exercises completed. Duration: ${durationMinutes} minutes.`;
+    })
     .join("\n");
 
   const prompt = `
     You are an expert fitness coach. The user has just finished Week ${
       lastWeek.weekNumber
     } of "${plan.programName}".
-    
+
     User Profile: ${profile.goal}, ${profile.level}, ${profile.equipment}.
     Schedule: ${days}
     User Feedback for Week ${lastWeek.weekNumber}: "${feedback || "None"}"
-    
+
     Here is the structure of the previous week (Week ${lastWeek.weekNumber}):
     ${JSON.stringify(
       lastWeek.schedule.map((d) => ({
@@ -46,7 +45,7 @@ const generateNextWeekPlan = async (profile, plan, history, feedback) => {
       profile.sessionDuration || 60
     } minutes.
     - Provide an "alternatives" array (3 items) for every exercise.
-    
+
     **OUTPUT FORMAT:**
     Returns STRICT, parseable JSON. No markdown, no preambles.
     Structure:
@@ -64,13 +63,13 @@ const generateNextWeekPlan = async (profile, plan, history, feedback) => {
               "dayName": "Monday",
               "focus": "Primary Focus (e.g., Push, Pull, Legs, Upper Body)",
               "exercises": [
-                 { 
-                   "name": "Exercise Name", 
-                   "sets": 3, 
-                   "reps": "8-12", 
-                   "rest": "60s", 
-                   "notes": "Progression note", 
-                   "alternatives": ["Exact Alt 1", "Exact Alt 2", "Exact Alt 3"] 
+                 {
+                   "name": "Exercise Name",
+                   "sets": 3,
+                   "reps": "8-12",
+                   "rest": "60s",
+                   "notes": "Progression note",
+                   "alternatives": ["Exact Alt 1", "Exact Alt 2", "Exact Alt 3"]
                  }
               ]
             }
@@ -80,7 +79,8 @@ const generateNextWeekPlan = async (profile, plan, history, feedback) => {
     }
   `;
 
-  const result = await callModel(prompt);
+  const token = await getUserToken();
+  const result = await callModel(prompt, token);
 
   if (result && result.weeks && result.weeks.length > 0) {
     return result;

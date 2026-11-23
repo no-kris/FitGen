@@ -1,0 +1,21 @@
+# --- App AI provider: api/callModel.js (Groq) ---
+(^|\.)groq\.com$
+
+# --- Agent providers (Antigravity / Gemini / Google Auth & CLI) ---
+(^|\.)google\.com$
+(^|\.)accounts\.google\.com$
+(^|\.)generativelanguage\.googleapis\.com$
+(^|\.)antigravity\.google$
+(^|\.)run\.app$
+
+# --- Google APIs: Firebase ID-token verification in api/_utils.js ---
+(^|\.)googleapis\.com$
+
+# --- npm / git ---
+(^|\.)npmjs\.org$
+(^|\.)npmjs\.com$
+(^|\.)github\.com$
+(^|\.)githubusercontent\.com$
+
+# --- Vercel CLI, only if you add `vercel dev` ---
+(^|\.)vercel\.com$
