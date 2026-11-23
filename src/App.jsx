@@ -9,6 +9,7 @@ import LogsScreen from "./components/screens/LogsScreen";
 import PlanDashboard from "./features/dashboard/PlanDashboard";
 import ActiveWorkout from "./features/workout/ActiveWorkout";
 import { firestoreService } from "./services/firebase/firestoreServices";
+import { activeWorkoutStore } from "./services/storage/activeWorkoutStore";
 import { AppContext } from "./context/AppContext";
 import { useAuthObserver } from "./hooks/useAuthObserver";
 import { useCloudSync } from "./hooks/useCloudSync";
@@ -37,18 +38,28 @@ function App() {
 
   const { user, setUser, isGuest, setIsGuest } =
     useAuthObserver(handleLogoutEvent);
-  useCloudSync(user, userData, setUserData, handleSyncComplete);
+  const { isSynced, syncError } = useCloudSync(
+    user,
+    userData,
+    setUserData,
+    handleSyncComplete
+  );
 
   const clearStorage = () => {
     setUserData({ profile: null, plan: null, history: [] });
-    localStorage.removeItem("fitgen-active");
+    activeWorkoutStore.clear();
   };
 
-  const handleSavePlan = (plan, profile) => {
-    setUserData((prev) => ({ ...prev, plan, profile }));
+  const handleSavePlan = async (plan, profile) => {
     if (user) {
-      firestoreService.saveUserData(user.uid, { plan, profile });
+      if (!isSynced) {
+        throw new Error(
+          "Still syncing your data from the cloud. Please try again in a moment."
+        );
+      }
+      await firestoreService.saveUserData(user.uid, { plan, profile });
     }
+    setUserData((prev) => ({ ...prev, plan, profile }));
     setView("plan");
   };
 
@@ -67,6 +78,8 @@ function App() {
   const contextValue = {
     user,
     setUser,
+    isSynced,
+    syncError,
     view,
     setView,
     isGuest,

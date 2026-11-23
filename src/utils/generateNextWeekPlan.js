@@ -7,14 +7,12 @@ const generateNextWeekPlan = async (profile, plan, history, feedback) => {
   const days = profile.selectedDays.join(", ");
   const recentHistory = (history || [])
     .slice(-10)
-    .map(
-      (log) =>
-        `${log.workout.focus}: ${
-          log.logs.length
-        } exercises completed. Duration: ${Math.floor(
-          log.duration / 60
-        )} minutes.`
-    )
+    .map((log) => {
+      const focus = log?.focus ?? log?.workout?.focus ?? "Workout";
+      const exerciseCount = Array.isArray(log?.logs) ? log.logs.length : 0;
+      const durationMinutes = Math.floor((log?.duration || 0) / 60);
+      return `${focus}: ${exerciseCount} exercises completed. Duration: ${durationMinutes} minutes.`;
+    })
     .join("\n");
 
   const prompt = `

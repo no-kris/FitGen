@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Button from "../../components/ui/Button";
+import Modal from "../../components/ui/Modal";
 import Schedule from "./Schedule";
 import { CheckCircle2, Notebook, PlusCircle } from "lucide-react";
 import FeedbackModal from "../workout/FeedbackModal";
@@ -10,12 +11,18 @@ import { useAppContext } from "../../context/AppContext";
 export default function PlanDashboard() {
   const { userData } = useAppContext();
   const { plan, history } = userData;
-  const { handleGenerateNextWeek, handleReplaceExercise, handleStartWorkout } =
-    useWorkout();
+  const {
+    handleGenerateNextWeek,
+    handleReplaceExercise,
+    handleStartWorkout,
+    handleResumePausedWorkout,
+    handleDiscardAndStartWorkout,
+  } = useWorkout();
 
   const [weekIndex, setWeekIndex] = useState(0);
   const [activeDayIndex, setActiveDayIndex] = useState(null);
   const [showCheckin, setShowCheckin] = useState(false);
+  const [pausedConflict, setPausedConflict] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -39,24 +46,22 @@ export default function PlanDashboard() {
       <div className="text-center text-2xl text-muted p-6">LOADING...</div>
     );
 
-  const handleCompleted = (day) => {
-    return history.some(
-      (h) =>
-        h?.workout?.dayName === day.dayName &&
-        h?.workout?.weekNumber === currentWeek.weekNumber
-    );
-  };
+  const isDayCompleted = (day) =>
+    history.some((h) => {
+      const entryWeek = h?.weekNumber ?? h?.workout?.weekNumber;
+      const entryDayName = h?.dayName ?? h?.workout?.dayName;
+      const entryDayNumber = h?.dayNumber ?? h?.workout?.dayNumber;
+      if (entryWeek !== currentWeek.weekNumber) return false;
+      if (entryDayName != null && day.dayName != null) {
+        return entryDayName === day.dayName;
+      }
+      return entryDayNumber != null && entryDayNumber === day.dayNumber;
+    });
 
   const isLastAvailableWeek = weekIndex === plan.weeks.length - 1;
   const isProgramCompleted = currentWeek.weekNumber >= plan.totalWeeks;
 
-  const allWorkoutsCompleted = currentWeek.schedule.every((day) =>
-    history.some(
-      (h) =>
-        h?.workout?.dayName === day.dayName &&
-        h?.workout?.weekNumber === currentWeek.weekNumber
-    )
-  );
+  const allWorkoutsCompleted = currentWeek.schedule.every(isDayCompleted);
 
   const handleCheckin = async (feedback) => {
     setIsLoading(true);
@@ -117,8 +122,13 @@ export default function PlanDashboard() {
         <Schedule
           currentWeek={currentWeek}
           setDetails={setActiveDayIndex}
-          onCompleted={handleCompleted}
-          onStartWorkout={handleStartWorkout}
+          onCompleted={isDayCompleted}
+          onStartWorkout={(day) => {
+            const res = handleStartWorkout(day);
+            if (res?.status === "conflict") {
+              setPausedConflict(res);
+            }
+          }}
         />
       </div>
 
@@ -162,10 +172,62 @@ export default function PlanDashboard() {
         isOpen={!!activeDayDetails}
         onClose={() => setActiveDayIndex(null)}
         details={activeDayDetails}
-        onReplaceExercise={(exIndex, newEx) => {
-          handleReplaceExercise(weekIndex, activeDayIndex, exIndex, newEx);
+        onReplaceExercise={async (exIndex, newEx) => {
+          try {
+            setError(null);
+            await handleReplaceExercise(
+              weekIndex,
+              activeDayIndex,
+              exIndex,
+              newEx
+            );
+          } catch (err) {
+            setError(err);
+          }
         }}
       />
+
+      <Modal
+        isOpen={Boolean(pausedConflict)}
+        onClose={() => setPausedConflict(null)}
+        title="Workout In Progress"
+      >
+        {pausedConflict && (
+          <div className="flex flex-col gap-3">
+            <p className="text-lg">
+              You have a paused workout (Week{" "}
+              {pausedConflict.pausedWorkout.weekNumber} -{" "}
+              {pausedConflict.pausedWorkout.dayName}). Would you like to resume
+              it or discard it and start {pausedConflict.requestedDay.dayName}?
+            </p>
+            <div className="flex flex-col gap-2">
+              <Button
+                text="Resume Paused"
+                onClick={() => {
+                  const paused = pausedConflict.pausedWorkout;
+                  setPausedConflict(null);
+                  handleResumePausedWorkout(paused);
+                }}
+                className="button btn-primary w-full font-bold text-lg uppercase p-4 letter-spacing-2"
+              />
+              <Button
+                text="Discard & Start"
+                onClick={() => {
+                  const requested = pausedConflict.requestedDay;
+                  setPausedConflict(null);
+                  handleDiscardAndStartWorkout(requested);
+                }}
+                className="button btn-danger w-full font-bold text-lg uppercase p-4 letter-spacing-2"
+              />
+              <Button
+                text="Cancel"
+                onClick={() => setPausedConflict(null)}
+                className="button btn-muted w-full font-bold text-lg uppercase p-4 letter-spacing-2"
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

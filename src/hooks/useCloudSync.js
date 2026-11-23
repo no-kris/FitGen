@@ -1,14 +1,24 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { firestoreService } from "../services/firebase/firestoreServices";
 
 export function useCloudSync(user, userData, setUserData, onSyncComplete) {
+  const [syncState, setSyncState] = useState({
+    user: null,
+    isSynced: false,
+    syncError: null,
+  });
   const localDataRef = useRef(userData);
+  const setUserDataRef = useRef(setUserData);
   const onSyncCompleteRef = useRef(onSyncComplete);
 
   // Keep a ref to the latest callbacks/local data
   useEffect(() => {
     localDataRef.current = userData;
   }, [userData]);
+
+  useEffect(() => {
+    setUserDataRef.current = setUserData;
+  }, [setUserData]);
 
   useEffect(() => {
     onSyncCompleteRef.current = onSyncComplete;
@@ -24,31 +34,47 @@ export function useCloudSync(user, userData, setUserData, onSyncComplete) {
       let finalHasPlan = false;
       try {
         const cloudData = await firestoreService.getUserData(user.uid);
-        if (cloudData && isMounted) {
-          setUserData((prev) => ({
-            profile: cloudData.profile || prev.profile,
-            plan: cloudData.plan || prev.plan,
-            history: cloudData.history || prev.history,
+        if (cloudData && Array.isArray(cloudData.history)) {
+          await firestoreService.migrateLegacyHistory(
+            user.uid,
+            cloudData.history
+          );
+        }
+        const cloudWorkouts = await firestoreService.getWorkouts(user.uid);
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (cloudData || cloudWorkouts.length > 0) {
+          setUserDataRef.current((prev) => ({
+            profile: cloudData?.profile ?? prev.profile,
+            plan: cloudData?.plan ?? prev.plan,
+            history: cloudWorkouts,
           }));
-          finalHasPlan = !!cloudData.plan;
-        } else if (isMounted) {
+          finalHasPlan = Boolean(cloudData?.plan);
+        } else {
           const currentLocalData = localDataRef.current;
           if (currentLocalData.plan || currentLocalData.profile) {
             await firestoreService.saveUserData(user.uid, {
               plan: currentLocalData.plan,
               profile: currentLocalData.profile,
-              history: currentLocalData.history,
             });
           }
-          finalHasPlan = !!currentLocalData.plan;
+          finalHasPlan = Boolean(currentLocalData.plan);
+        }
+
+        if (isMounted) {
+          setSyncState({ user, isSynced: true, syncError: null });
         }
       } catch (err) {
         console.error("Sync Error:", err);
-      } finally {
         if (isMounted) {
-          if (onSyncCompleteRef.current) {
-            onSyncCompleteRef.current(finalHasPlan);
-          }
+          setSyncState({ user, isSynced: false, syncError: err });
+        }
+      } finally {
+        if (isMounted && onSyncCompleteRef.current) {
+          onSyncCompleteRef.current(finalHasPlan);
         }
       }
     };
@@ -58,7 +84,12 @@ export function useCloudSync(user, userData, setUserData, onSyncComplete) {
     return () => {
       isMounted = false;
     };
-  }, [user, setUserData]);
+  }, [user]);
 
-  return {};
+  const isCurrentUser = Boolean(user && syncState.user === user);
+
+  return {
+    isSynced: isCurrentUser ? syncState.isSynced : false,
+    syncError: isCurrentUser ? syncState.syncError : null,
+  };
 }
