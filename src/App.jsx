@@ -25,7 +25,6 @@ function App() {
   });
 
   const handleLogoutEvent = () => {
-    // Only clear data and redirect if they weren't a guest
     setUserData({ profile: null, plan: null, history: [] });
     setView("welcome");
   };
@@ -36,8 +35,7 @@ function App() {
     }
   };
 
-  const { user, setUser, isGuest, setIsGuest } =
-    useAuthObserver(handleLogoutEvent);
+  const { user, setUser } = useAuthObserver(handleLogoutEvent);
   const { isSynced, syncError } = useCloudSync(
     user,
     userData,
@@ -82,8 +80,6 @@ function App() {
     syncError,
     view,
     setView,
-    isGuest,
-    setIsGuest,
     userData,
     setUserData,
     showAuth,

@@ -2,7 +2,7 @@ import { authService } from "../services/firebase/authServices";
 import { firestoreService } from "../services/firebase/firestoreServices";
 import sendWelcomeMessage from "../services/api/emailService";
 
-export function useAuth({ user, clearStorage, setShowAuth }) {
+export function useAuth({ user, clearStorage, setShowAuth } = {}) {
   const handleSignUp = async (userData) => {
     try {
       await authService.signUp(userData.email, userData.password);
@@ -22,14 +22,6 @@ export function useAuth({ user, clearStorage, setShowAuth }) {
     } catch (error) {
       console.error("Login failed", error);
       throw new Error("Failed to login. Try again or create an account.");
-    }
-  };
-
-  const handleGuestLogin = async () => {
-    try {
-      await authService.signInGuest();
-    } catch (error) {
-      console.log("Guest login failed", error);
     }
   };
 
@@ -61,11 +53,7 @@ export function useAuth({ user, clearStorage, setShowAuth }) {
 
   const handleLogout = async () => {
     try {
-      if (user && user.isAnonymous) {
-        await handleDeleteAccount();
-      } else {
-        await authService.logout();
-      }
+      await authService.logout();
     } catch (error) {
       console.error("Logout failed", error);
     }
@@ -74,7 +62,6 @@ export function useAuth({ user, clearStorage, setShowAuth }) {
   return {
     handleSignUp,
     handleLogin,
-    handleGuestLogin,
     handleResetPassword,
     handleLogout,
     handleDeleteAccount,

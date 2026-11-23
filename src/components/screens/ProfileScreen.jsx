@@ -10,7 +10,6 @@ export default function ProfileScreen() {
   const {
     userData,
     handleResetSystem: onResetSystem,
-    isGuest,
     user,
     clearStorage,
   } = useAppContext();
@@ -76,17 +75,15 @@ export default function ProfileScreen() {
             onClick={() => setActiveModal("reset")}
             className="button btn-danger w-full mb-4 text-2xl font-bold letter-spacing-2 p-3"
           />
-          {!isGuest && (
-            <Button
-              text="LOGOUT"
-              onClick={() => {
-                handleLogout();
-              }}
-              icon={LogOut}
-              iconSize={20}
-              className="button btn-secondary w-full mb-4 text-2xl font-bold letter-spacing-2 p-3"
-            />
-          )}
+          <Button
+            text="LOGOUT"
+            onClick={() => {
+              handleLogout();
+            }}
+            icon={LogOut}
+            iconSize={20}
+            className="button btn-secondary w-full mb-4 text-2xl font-bold letter-spacing-2 p-3"
+          />
         </div>
 
         <div className="flex justify-between pb-4">
@@ -101,13 +98,11 @@ export default function ProfileScreen() {
             }
             className="text-success uppercase"
           />
-          {!isGuest && (
-            <Button
-              text="DELETE ACCOUNT"
-              onClick={() => setActiveModal("delete-account")}
-              className="text-error uppercase"
-            />
-          )}
+          <Button
+            text="DELETE ACCOUNT"
+            onClick={() => setActiveModal("delete-account")}
+            className="text-error uppercase"
+          />
           <Button
             text="File REPORT"
             onClick={() => setActiveModal("report")}

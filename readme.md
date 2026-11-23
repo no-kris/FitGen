@@ -21,5 +21,5 @@ FitGen is a Progressive Web App (PWA) and Capacitor Mobile App designed to gener
 
 ### Cloud Synchronization & Accounts
 - **Seamless Cloud Sync**: Synchronizes workout plans, user profiles, and history across multiple devices securely using the cloud.
-- **Flexible Authentication**: Supports standard email/password accounts as well as anonymous "Guest" logins for users who want to try the app before committing to an account.
+- **Email/Password Authentication**: Secures user profiles, workout plans, and history with standard email and password accounts.
 - **Offline Resilience**: Continues to function and track active workouts even with intermittent internet connectivity, syncing data once the connection is restored.

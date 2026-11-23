@@ -6,6 +6,7 @@ import { useAppContext } from "./context/AppContext";
 
 const authMocks = vi.hoisted(() => ({
   subscribeToAuthChanges: vi.fn(),
+  logout: vi.fn(),
 }));
 
 const authCallbacks = vi.hoisted(() => ({
@@ -36,6 +37,7 @@ function ContextCapture({ label, children = null }) {
 vi.mock("./services/firebase/authServices", () => ({
   authService: {
     subscribeToAuthChanges: authMocks.subscribeToAuthChanges,
+    logout: authMocks.logout,
   },
 }));
 
@@ -210,5 +212,59 @@ describe("App handleSavePlan and sync guard", () => {
 
     expect(localStorage.getItem("fitgen:active:v1")).toBeNull();
     expect(localStorage.getItem("fitgen-active")).toBeNull();
+  });
+});
+
+describe("App auth context and anonymous sign-out", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.resetAllMocks();
+    authCallbacks.listener = null;
+    contextStore.value = null;
+    authMocks.logout.mockResolvedValue(undefined);
+    authMocks.subscribeToAuthChanges.mockImplementation((cb) => {
+      authCallbacks.listener = cb;
+      return vi.fn();
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("exposes the exact 15 AppContext keys", () => {
+    render(<App />);
+
+    expect(Object.keys(contextStore.value).sort()).toEqual([
+      "activeWorkout",
+      "clearStorage",
+      "handleResetSystem",
+      "handleSavePlan",
+      "isSynced",
+      "setActiveWorkout",
+      "setShowAuth",
+      "setUser",
+      "setUserData",
+      "setView",
+      "showAuth",
+      "syncError",
+      "user",
+      "userData",
+      "view",
+    ]);
+  });
+
+  it("signs out an anonymous auth event, stays on welcome, and skips Firestore sync", async () => {
+    render(<App />);
+
+    await act(async () => {
+      authCallbacks.listener({ uid: "anon-1", isAnonymous: true });
+    });
+
+    expect(authMocks.logout).toHaveBeenCalledTimes(1);
+    expect(contextStore.value.user).toBeNull();
+    expect(contextStore.value.view).toBe("welcome");
+    expect(firestoreServiceMock.getUserData).not.toHaveBeenCalled();
+    expect(firestoreServiceMock.getWorkouts).not.toHaveBeenCalled();
   });
 });

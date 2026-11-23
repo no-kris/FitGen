@@ -1,14 +1,12 @@
-import GuestBanner from "../ui/GuestBanner";
 import NavIcon from "../ui/NavIcon";
 import { Calendar, Dumbbell, User } from "lucide-react";
 import { useAppContext } from "../../context/AppContext";
 
 export default function Layout({ children }) {
-  const { view, setView, isGuest, setShowAuth } = useAppContext();
+  const { view, setView } = useAppContext();
 
   return (
     <div className="app-container">
-      {isGuest && <GuestBanner onClick={() => setShowAuth(true)} />}
       <div
         className={`content-area ${
           view !== "welcome" && view !== "active" ? "has-nav" : ""

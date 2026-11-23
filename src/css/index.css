@@ -93,16 +93,6 @@ input[type="number"] {
   min-height: min-content;
 }
 
-.guest-banner {
-  padding: 2rem;
-  padding-top: calc(var(--safe-top) + 2rem);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background-color: var(--bg-card);
-  border-bottom: 1px solid var(--border-color);
-}
-
 .card {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
