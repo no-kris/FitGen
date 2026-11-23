@@ -5,10 +5,9 @@ model: inherit
 mainAgent: false
 subagent: true
 tools:
-  - view_file
-  - client_view_file
-  - client_edit_file
-  - client_create_file
+  - read_file
+  - edit_file
+  - write_file
   - run_command
   - invoke_subagent
   - send_message
