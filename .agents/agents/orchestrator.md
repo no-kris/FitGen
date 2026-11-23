@@ -2,8 +2,8 @@
 name: orchestrator
 description: Coordinates a test-driven run across subagents - sequences designers, implementer, styler, tester, verifier, and reviewer, enforces the gates, and records the run. Never writes code, tests, or specs.
 model: inherit
-mainAgent: true
-subagent: false
+mainAgent: false
+subagent: true
 tools:
   - view_file
   - client_view_file
