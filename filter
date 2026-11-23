@@ -1,14 +1,12 @@
-# --- Agent (OpenCode) ---
-(^|\.)opencode\.ai$
-(^|\.)models\.dev$
-
 # --- App AI provider: api/callModel.js (Groq) ---
 (^|\.)groq\.com$
 
-# --- Agent providers (OpenCode) ---
-(^|\.)openrouter\.ai$
-(^|\.)openai\.com$
-(^|\.)anthropic\.com$
+# --- Agent providers (Antigravity / Gemini / Google Auth & CLI) ---
+(^|\.)google\.com$
+(^|\.)accounts\.google\.com$
+(^|\.)generativelanguage\.googleapis\.com$
+(^|\.)antigravity\.google$
+(^|\.)run\.app$
 
 # --- Google APIs: Firebase ID-token verification in api/_utils.js ---
 (^|\.)googleapis\.com$

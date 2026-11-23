@@ -1,6 +1,6 @@
 # Agentic Dev Environment
 
-A Docker sandbox for refactoring fit-gen-v2 with OpenCode. The container has no
+A Docker sandbox for developing and refactoring fit-gen-v2 with Antigravity. The container has no
 direct internet access; everything outbound goes through a tinyproxy sidecar with
 an allowlist.
 
@@ -16,7 +16,7 @@ an allowlist.
 ## First run
 
 ```bash
-docker compose down -v      # drops stale volumes, including old node_modules/venv
+docker compose down -v      # drops stale volumes, including old node_modules
 docker compose build
 docker compose up -d
 docker compose exec dev bash
@@ -28,6 +28,22 @@ change to `package.json` or `package-lock.json`, refresh the volume:
 ```bash
 docker compose exec dev npm install
 ```
+
+## Running the Interactive Antigravity CLI
+
+Inside the container:
+
+```bash
+docker compose exec dev agy
+```
+
+Or attach a bash terminal first:
+```bash
+docker compose exec dev bash
+agy
+```
+
+On first launch, follow the one-time Google OAuth browser link to authenticate your Google AI Pro account. Your session token will be saved inside the isolated `antigravity-config` volume.
 
 ## Running the app
 
@@ -44,14 +60,6 @@ publishing port 3000) or point that variable at your deployed API.
 
 If HMR stops working on a Windows bind mount, restart with `CHOKIDAR_USEPOLLING=1`.
 
-## Using OpenCode
-
-```bash
-opencode
-```
-
-The agent's model is independent of the app's AI provider.  Credentials persist in the `opencode-data` volume.
-
 ## Network policy
 
 - `dev` sits on an internal network with no route out.
@@ -66,7 +74,7 @@ The agent's model is independent of the app's AI provider.  Credentials persist 
 
 - `ConnectPort 443` means **HTTPS only**: no `git` over SSH, no port 22. Use
   HTTPS remotes.
-- Allowlisted AI hosts: `api.groq.com` (app), `openrouter.ai` (agent), and
+- Allowlisted AI hosts: `api.groq.com` (app), Google APIs / Gemini (agent), and
   `googleapis.com` (Firebase token checks).
 - CONNECT is allowed only for the pinned `10.201.0.0/24` subnet; changing that
   subnet means changing `Allow` in `tinyproxy.conf` in the same commit.
@@ -95,5 +103,5 @@ The agent's model is independent of the app's AI provider.  Credentials persist 
 
 ```bash
 docker compose down        # keep volumes (fast restart)
-docker compose down -v     # also drop node_modules and agent state
+docker compose down -v     # also drop node_modules and agent config
 ```

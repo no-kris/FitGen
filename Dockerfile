@@ -1,9 +1,6 @@
 # Agentic dev container for fit-gen-v2 (Vite SPA + Vercel edge functions in api/)
 FROM node:22-bookworm-slim
 
-# Pin the agent version so rebuilds don't silently change it
-ARG OPENCODE_VERSION=1.19.6
-
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -26,20 +23,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         unzip \
     && rm -rf /var/lib/apt/lists/*
 
-# OpenCode CLI
-RUN npm install -g "opencode-ai@${OPENCODE_VERSION}" \
-    && npm cache clean --force
+# Install official Antigravity CLI binary
+RUN curl -fsSL https://antigravity.google/cli/install.sh | bash -s -- --dir /usr/local/bin
 
 # Bind-mounted Windows checkout: no "dubious ownership", no CRLF phantom diffs
 RUN git config --system --add safe.directory /workspace \
     && git config --system core.autocrlf input \
     && git config --system init.defaultBranch main
-
-# Seed dirs so the named volumes inherit sane ownership
-RUN mkdir -p /root/.config/opencode \
-             /root/.local/share/opencode \
-             /root/.local/state/opencode \
-             /root/.cache/opencode
 
 WORKDIR /workspace
 

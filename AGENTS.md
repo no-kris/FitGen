@@ -41,7 +41,7 @@ open: <who must act next, or "none">
 ```
 
 - `status` is role-specific: `done | blocked | needs-decision` for the designers,
-  `implementer`, and `tester`; `done | blocked` for `verifier`; `pass | reject |
+  `implementer`, `styler`, and `tester`; `done | blocked` for `verifier`; `pass | reject |
   blocked` for `reviewer`.
 - `blocked` or `needs-decision` stops the run until the human decides.
 - The orchestrator writes no HANDOFF of its own; it ends with the run verdict.
@@ -51,7 +51,7 @@ open: <who must act next, or "none">
 These apply to the agent the user talks to directly, not to subagents.
 
 - Do not implement multi-file or multi-step work inline. Launch the `orchestrator`
-  subagent and let it run the designers, `implementer`, `tester`, `verifier`, and
+  subagent and let it run the designers, `implementer`, `styler`, `tester`, `verifier`, and
   `reviewer`, and request approval before committing. Handle only small,
   single-file changes yourself.
 - For delegated work, read nothing: the orchestrator's messages carry the spec at the
@@ -67,7 +67,7 @@ These apply to the agent the user talks to directly, not to subagents.
 ## Subagents
 
 - The prompt you were given defines your role and what you may edit. 
-- Only `implementer` edits product code and only `tester` edits test code. `data`,
+- Only `implementer` edits product JavaScript code, only `styler` edits CSS and style classes, and only `tester` edits test code. `data`,
   `domain`, `ui`, and `api` design changes as specs; `verifier` and `reviewer` report.
 - If you need a change you are not allowed to make, describe it in your `HANDOFF`
   block instead. Do not work around a denied edit with shell commands.

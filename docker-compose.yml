@@ -30,10 +30,8 @@ services:
     volumes:
       - .:/workspace
       - fit-gen-node-modules:/workspace/node_modules
-      - opencode-config:/root/.config/opencode
-      - opencode-data:/root/.local/share/opencode
-      - opencode-state:/root/.local/state/opencode
-      - opencode-cache:/root/.cache/opencode
+      # Dedicated container-isolated volume for Antigravity credentials
+      - antigravity-config:/root/.gemini
       # Optional hardening: keep .env visible but unwritable to the agent
       # - ./.env:/workspace/.env:ro
     ports:
@@ -57,7 +55,4 @@ services:
 
 volumes:
   fit-gen-node-modules:
-  opencode-config:
-  opencode-data:
-  opencode-state:
-  opencode-cache:
+  antigravity-config:
