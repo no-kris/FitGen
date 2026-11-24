@@ -10,7 +10,6 @@ tools:
   - edit_file
   - write_file
   - run_command
-  - call_mcp_tool
   - invoke_subagent
   - send_message
 mcpServers:

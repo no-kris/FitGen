@@ -10,7 +10,6 @@ tools:
   - edit_file
   - write_file
   - run_command
-  - call_mcp_tool
 mcpServers:
   - name: fitgen-dev-tools
     command: node
