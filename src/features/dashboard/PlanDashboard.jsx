@@ -1,15 +1,21 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
 import Schedule from "./Schedule";
-import { CheckCircle2, Notebook, PlusCircle } from "lucide-react";
+import { CheckCircle2, Loader2, Notebook, PlusCircle } from "lucide-react";
 import FeedbackModal from "../workout/FeedbackModal";
 import DayDetailModal from "../workout/DayDetailModal";
 import { useWorkout } from "../../hooks/useWorkout";
 import { useAppContext } from "../../context/AppContext";
 
 export default function PlanDashboard() {
-  const { userData } = useAppContext();
+  const {
+    user,
+    userData,
+    isSynced = true,
+    syncError = null,
+    retrySync,
+  } = useAppContext();
   const { plan, history } = userData;
   const {
     handleGenerateNextWeek,
@@ -19,32 +25,53 @@ export default function PlanDashboard() {
     handleDiscardAndStartWorkout,
   } = useWorkout();
 
-  const [weekIndex, setWeekIndex] = useState(0);
+  const isSyncFailed = Boolean(user && !isSynced && syncError);
+  const isSyncPending = Boolean(user && !isSynced && !syncError);
+
+  const weeksLength = Array.isArray(plan?.weeks) ? plan.weeks.length : 0;
+
+  const [weekIndex, setWeekIndex] = useState(() =>
+    weeksLength > 0 ? weeksLength - 1 : 0
+  );
+  const [prevWeeksLength, setPrevWeeksLength] = useState(weeksLength);
   const [activeDayIndex, setActiveDayIndex] = useState(null);
   const [showCheckin, setShowCheckin] = useState(false);
   const [pausedConflict, setPausedConflict] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    if (plan?.weeks) {
-      setWeekIndex(plan.weeks.length - 1);
+  if (weeksLength !== prevWeeksLength) {
+    setPrevWeeksLength(weeksLength);
+    if (weeksLength > prevWeeksLength) {
+      setWeekIndex(weeksLength - 1);
+      setActiveDayIndex(null);
+    } else if (weeksLength === 0) {
+      setWeekIndex(0);
+      setActiveDayIndex(null);
+    } else if (weekIndex >= weeksLength) {
+      setWeekIndex(weeksLength - 1);
+      setActiveDayIndex(null);
     }
-  }, [plan]);
+  }
 
-  if (!plan || !plan.weeks || plan.totalWeeks === 0)
+  const activeWeekIndex =
+    weeksLength > 0 ? Math.min(Math.max(weekIndex, 0), weeksLength - 1) : 0;
+
+  if (!plan || !Array.isArray(plan.weeks) || plan.totalWeeks === 0)
     return (
       <div className="text-center text-2xl text-muted p-6">NO DATA FOUND</div>
     );
 
-  const currentWeek = plan.weeks[weekIndex] || plan.weeks[0];
-  const activeDayDetails =
-    activeDayIndex !== null ? currentWeek.schedule[activeDayIndex] : null;
-
+  const currentWeek = plan.weeks[activeWeekIndex] || plan.weeks[0];
   if (!currentWeek)
     return (
       <div className="text-center text-2xl text-muted p-6">LOADING...</div>
     );
+
+  const activeDayDetails =
+    activeDayIndex !== null && Array.isArray(currentWeek.schedule)
+      ? currentWeek.schedule[activeDayIndex] ?? null
+      : null;
 
   const isDayCompleted = (day) =>
     history.some((h) => {
@@ -58,7 +85,7 @@ export default function PlanDashboard() {
       return entryDayNumber != null && entryDayNumber === day.dayNumber;
     });
 
-  const isLastAvailableWeek = weekIndex === plan.weeks.length - 1;
+  const isLastAvailableWeek = activeWeekIndex === plan.weeks.length - 1;
   const isProgramCompleted = currentWeek.weekNumber >= plan.totalWeeks;
 
   const allWorkoutsCompleted = currentWeek.schedule.every(isDayCompleted);
@@ -87,18 +114,51 @@ export default function PlanDashboard() {
         </div>
       </div>
 
+      {isSyncFailed ? (
+        <div
+          role="alert"
+          className="alert-error flex items-center justify-between gap-3 mt-4"
+        >
+          <span className="text-lg font-bold">
+            {syncError?.message || "Failed to sync your cloud data."}
+          </span>
+          <Button
+            type="button"
+            text="Retry Sync"
+            onClick={() => retrySync?.()}
+            className="button btn-primary text-base font-bold uppercase p-2 letter-spacing-2 shrink-0"
+          />
+        </div>
+      ) : (
+        isSyncPending && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="card p-3 mt-4 flex items-center justify-center gap-2 text-muted text-lg font-bold"
+          >
+            <Loader2 className="animate-spin" size={16} aria-hidden="true" />
+            <span>Syncing your cloud data...</span>
+          </div>
+        )
+      )}
+
       <div className="flex gap-4 mt-4 overflow-x-auto">
         {plan.weeks.map((week, index) => (
           <div
-            key={index}
+            key={`${week.weekNumber}-${index}`}
             className={`p-2 shrink-0 ${
-              weekIndex === index ? "bg-primary" : "bg-muted"
+              activeWeekIndex === index ? "bg-primary" : "bg-muted"
             }`}
           >
             <Button
-              onClick={() => setWeekIndex(index)}
+              type="button"
+              onClick={() => {
+                setWeekIndex(index);
+                setActiveDayIndex(null);
+              }}
+              aria-pressed={activeWeekIndex === index}
               className={`letter-spacing-2 font-semibold ${
-                weekIndex === index ? "text-dark" : "text-primary"
+                activeWeekIndex === index ? "text-dark" : "text-primary"
               }`}
               text={`Week ${week.weekNumber}`}
             />
@@ -168,24 +228,25 @@ export default function PlanDashboard() {
         onCheckin={handleCheckin}
       />
 
-      <DayDetailModal
-        isOpen={!!activeDayDetails}
-        onClose={() => setActiveDayIndex(null)}
-        details={activeDayDetails}
-        onReplaceExercise={async (exIndex, newEx) => {
-          try {
-            setError(null);
-            await handleReplaceExercise(
-              weekIndex,
+      {activeDayDetails && (
+        <DayDetailModal
+          isOpen
+          onClose={() => setActiveDayIndex(null)}
+          details={activeDayDetails}
+          isSyncPending={isSyncPending}
+          isSyncFailed={isSyncFailed}
+          syncError={syncError}
+          onRetrySync={retrySync}
+          onReplaceExercise={(exIndex, newEx) =>
+            handleReplaceExercise(
+              activeWeekIndex,
               activeDayIndex,
               exIndex,
               newEx
-            );
-          } catch (err) {
-            setError(err);
+            )
           }
-        }}
-      />
+        />
+      )}
 
       <Modal
         isOpen={Boolean(pausedConflict)}

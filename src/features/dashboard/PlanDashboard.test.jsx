@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
+import { useState } from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   render,
   screen,
   fireEvent,
   within,
+  act,
   cleanup,
 } from "@testing-library/react";
 import { AppContext } from "../../context/AppContext";
@@ -70,32 +72,161 @@ function makeTwoDayPlan() {
   };
 }
 
-function renderDashboard({ history = [], plan = makeTwoDayPlan() } = {}) {
+function deepFreeze(value) {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const key of Object.keys(value)) {
+      deepFreeze(value[key]);
+    }
+  }
+  return value;
+}
+
+function createDeferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+function makeMultiWeekPlan(weekCount, totalWeeks = 4) {
+  return {
+    programName: "Hypertrophy Split",
+    description: "Upper/Lower progression",
+    totalWeeks,
+    weeks: Array.from({ length: weekCount }, (_, idx) => {
+      const weekNumber = idx + 1;
+      return {
+        weekNumber,
+        coachNotes: `Week ${weekNumber} coach focus`,
+        schedule: [
+          {
+            dayNumber: 1,
+            dayName: "Monday",
+            focus: `Week ${weekNumber} Push`,
+            exercises: [
+              {
+                name: weekNumber === 1 ? "Bench Press" : `Week ${weekNumber} Bench`,
+                sets: 3,
+                reps: "8-10",
+                rest: "90s",
+                alternatives: ["Dumbbell Press", "Push-ups"],
+              },
+            ],
+          },
+          {
+            dayNumber: 2,
+            dayName: "Wednesday",
+            focus: `Week ${weekNumber} Pull`,
+            exercises: [
+              {
+                name: `Week ${weekNumber} Row`,
+                sets: 3,
+                reps: "8-10",
+                rest: "90s",
+                alternatives: ["Cable Row"],
+              },
+            ],
+          },
+        ],
+      };
+    }),
+  };
+}
+
+function renderDashboard({
+  history = [],
+  plan = makeTwoDayPlan(),
+  user = { uid: "user-1" },
+  isSynced = true,
+  syncError = null,
+  retrySync = vi.fn(),
+} = {}) {
   const setUserData = vi.fn();
   const setView = vi.fn();
   const setActiveWorkout = vi.fn();
 
-  const contextValue = {
-    user: { uid: "user-1" },
-    isSynced: true,
-    syncError: null,
+  const buildContext = (overrides = {}) => ({
+    user: "user" in overrides ? overrides.user : user,
+    isSynced: "isSynced" in overrides ? overrides.isSynced : isSynced,
+    syncError: "syncError" in overrides ? overrides.syncError : syncError,
+    retrySync: "retrySync" in overrides ? overrides.retrySync : retrySync,
     userData: {
       profile: { goal: "muscle", selectedDays: ["Monday", "Wednesday"] },
-      plan,
-      history,
+      plan: "plan" in overrides ? overrides.plan : plan,
+      history: "history" in overrides ? overrides.history : history,
     },
     setUserData,
     setView,
     setActiveWorkout,
-  };
+  });
 
-  render(
-    <AppContext.Provider value={contextValue}>
+  const view = render(
+    <AppContext.Provider value={buildContext()}>
       <PlanDashboard />
     </AppContext.Provider>
   );
 
-  return { setUserData, setView, setActiveWorkout };
+  const rerenderDashboard = (overrides = {}) => {
+    view.rerender(
+      <AppContext.Provider value={buildContext(overrides)}>
+        <PlanDashboard />
+      </AppContext.Provider>
+    );
+  };
+
+  return {
+    ...view,
+    rerenderDashboard,
+    setUserData,
+    setView,
+    setActiveWorkout,
+    retrySync,
+  };
+}
+
+function StatefulDashboardHarness({
+  initialPlan,
+  initialHistory = [],
+  user = { uid: "user-1" },
+  isSynced = true,
+  syncError = null,
+  retrySync = vi.fn(),
+  onPlanChange,
+}) {
+  const [userData, setUserDataState] = useState({
+    profile: { goal: "muscle", selectedDays: ["Monday", "Wednesday"] },
+    plan: initialPlan,
+    history: initialHistory,
+  });
+
+  const setUserData = (updater) => {
+    setUserDataState((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      onPlanChange?.(next.plan);
+      return next;
+    });
+  };
+
+  return (
+    <AppContext.Provider
+      value={{
+        user,
+        isSynced,
+        syncError,
+        retrySync,
+        userData,
+        setUserData,
+        setView: vi.fn(),
+        setActiveWorkout: vi.fn(),
+      }}
+    >
+      <PlanDashboard />
+    </AppContext.Provider>
+  );
 }
 
 describe("PlanDashboard", () => {
@@ -271,5 +402,340 @@ describe("PlanDashboard", () => {
       })
     );
     expect(setView).toHaveBeenCalledWith("active");
+  });
+
+  describe("week tab selection and non-jumping updates", () => {
+    it("selects the latest week on initial mount with aria-pressed exposed on week buttons", () => {
+      renderDashboard({ plan: makeMultiWeekPlan(3, 4) });
+
+      expect(screen.getByText("WK 3/4")).not.toBeNull();
+      expect(
+        screen
+          .getByRole("button", { name: "Week 3" })
+          .getAttribute("aria-pressed")
+      ).toBe("true");
+      expect(
+        screen
+          .getByRole("button", { name: "Week 1" })
+          .getAttribute("aria-pressed")
+      ).toBe("false");
+      expect(
+        screen
+          .getByRole("button", { name: "Week 2" })
+          .getAttribute("aria-pressed")
+      ).toBe("false");
+    });
+
+    it("keeps a manually selected earlier week active across non-growing plan reference updates", () => {
+      const initialPlan = makeMultiWeekPlan(3, 4);
+      const { rerenderDashboard } = renderDashboard({ plan: initialPlan });
+
+      fireEvent.click(screen.getByRole("button", { name: "Week 1" }));
+      expect(screen.getByText("WK 1/4")).not.toBeNull();
+      expect(
+        screen
+          .getByRole("button", { name: "Week 1" })
+          .getAttribute("aria-pressed")
+      ).toBe("true");
+      expect(
+        screen
+          .getByRole("button", { name: "Week 3" })
+          .getAttribute("aria-pressed")
+      ).toBe("false");
+
+      const rehydratedPlan = {
+        ...initialPlan,
+        weeks: initialPlan.weeks.map((week) => ({ ...week })),
+      };
+      rerenderDashboard({ plan: rehydratedPlan });
+
+      expect(screen.getByText("WK 1/4")).not.toBeNull();
+      expect(
+        screen
+          .getByRole("button", { name: "Week 1" })
+          .getAttribute("aria-pressed")
+      ).toBe("true");
+      expect(
+        screen
+          .getByRole("button", { name: "Week 3" })
+          .getAttribute("aria-pressed")
+      ).toBe("false");
+    });
+
+    it("advances to the latest week when plan.weeks.length grows (from 2 to 3 and from null to 2)", () => {
+      const { rerenderDashboard } = renderDashboard({
+        plan: makeMultiWeekPlan(2, 4),
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "Week 1" }));
+      expect(screen.getByText("WK 1/4")).not.toBeNull();
+
+      rerenderDashboard({ plan: makeMultiWeekPlan(3, 4) });
+
+      expect(screen.getByText("WK 3/4")).not.toBeNull();
+      expect(
+        screen
+          .getByRole("button", { name: "Week 3" })
+          .getAttribute("aria-pressed")
+      ).toBe("true");
+      expect(
+        screen
+          .getByRole("button", { name: "Week 1" })
+          .getAttribute("aria-pressed")
+      ).toBe("false");
+
+      cleanup();
+
+      const fromNull = renderDashboard({ plan: null });
+      expect(screen.getByText("NO DATA FOUND")).not.toBeNull();
+
+      fromNull.rerenderDashboard({ plan: makeMultiWeekPlan(2, 4) });
+      expect(screen.getByText("WK 2/4")).not.toBeNull();
+      expect(
+        screen
+          .getByRole("button", { name: "Week 2" })
+          .getAttribute("aria-pressed")
+      ).toBe("true");
+      expect(
+        screen
+          .getByRole("button", { name: "Week 1" })
+          .getAttribute("aria-pressed")
+      ).toBe("false");
+    });
+
+    it("clamps week selection when plan.weeks shrinks out of bounds and stays put when still in bounds", () => {
+      const { rerenderDashboard } = renderDashboard({
+        plan: makeMultiWeekPlan(3, 4),
+      });
+      expect(screen.getByText("WK 3/4")).not.toBeNull();
+
+      rerenderDashboard({ plan: makeMultiWeekPlan(1, 4) });
+
+      expect(screen.getByText("WK 1/4")).not.toBeNull();
+      expect(
+        screen
+          .getByRole("button", { name: "Week 1" })
+          .getAttribute("aria-pressed")
+      ).toBe("true");
+      expect(
+        screen.getByRole("button", { name: /check-in & generate week 2/i })
+      ).not.toBeNull();
+
+      cleanup();
+
+      const inBounds = renderDashboard({ plan: makeMultiWeekPlan(3, 4) });
+      fireEvent.click(screen.getByRole("button", { name: "Week 1" }));
+      expect(screen.getByText("WK 1/4")).not.toBeNull();
+
+      inBounds.rerenderDashboard({ plan: makeMultiWeekPlan(2, 4) });
+
+      expect(screen.getByText("WK 1/4")).not.toBeNull();
+      expect(
+        screen
+          .getByRole("button", { name: "Week 1" })
+          .getAttribute("aria-pressed")
+      ).toBe("true");
+      expect(
+        screen
+          .getByRole("button", { name: "Week 2" })
+          .getAttribute("aria-pressed")
+      ).toBe("false");
+    });
+
+    it("handles empty weeks array while a day modal is open, null plan, and reloads into the newest week", () => {
+      const initialPlan = makeMultiWeekPlan(2, 4);
+      const { rerenderDashboard } = renderDashboard({ plan: initialPlan });
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "View Monday workout details" })
+      );
+      expect(screen.getByRole("dialog")).not.toBeNull();
+
+      rerenderDashboard({ plan: { ...initialPlan, weeks: [] } });
+      expect(screen.getByText("LOADING...")).not.toBeNull();
+      expect(screen.queryByRole("dialog")).toBeNull();
+
+      rerenderDashboard({ plan: null });
+      expect(screen.getByText("NO DATA FOUND")).not.toBeNull();
+
+      rerenderDashboard({ plan: makeMultiWeekPlan(2, 4) });
+      expect(screen.getByText("WK 2/4")).not.toBeNull();
+      expect(
+        screen
+          .getByRole("button", { name: "Week 2" })
+          .getAttribute("aria-pressed")
+      ).toBe("true");
+      expect(
+        screen
+          .getByRole("button", { name: "Week 1" })
+          .getAttribute("aria-pressed")
+      ).toBe("false");
+    });
+  });
+
+  describe("end-to-end immutable exercise swap in earlier week", () => {
+    it("immutably swaps an exercise in Week 1 without jumping week tabs or mutating the frozen plan", async () => {
+      const frozenPlan = deepFreeze(makeMultiWeekPlan(2, 4));
+      const saveDeferred = createDeferred();
+      firestoreServiceMock.saveUserData.mockReturnValueOnce(
+        saveDeferred.promise
+      );
+      let latestPlan = frozenPlan;
+
+      render(
+        <StatefulDashboardHarness
+          initialPlan={frozenPlan}
+          onPlanChange={(nextPlan) => {
+            latestPlan = nextPlan;
+          }}
+        />
+      );
+
+      expect(screen.getByText("WK 2/4")).not.toBeNull();
+
+      fireEvent.click(screen.getByRole("button", { name: "Week 1" }));
+      expect(screen.getByText("WK 1/4")).not.toBeNull();
+      expect(
+        screen.getByRole("button", { name: "Start Monday workout" })
+      ).not.toBeNull();
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "View Monday workout details" })
+      );
+      const dialog = screen.getByRole("dialog");
+      expect(
+        within(dialog).getByRole("heading", { name: "Bench Press" })
+      ).not.toBeNull();
+
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: "Swap Bench Press" })
+      );
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: "Dumbbell Press" })
+      );
+
+      expect(firestoreServiceMock.saveUserData).toHaveBeenCalledTimes(1);
+      expect(
+        within(dialog).getByRole("button", { name: /swapping/i })
+      ).not.toBeNull();
+      expect(frozenPlan.weeks[0].schedule[0].exercises[0].name).toBe(
+        "Bench Press"
+      );
+
+      await act(async () => {
+        saveDeferred.resolve(undefined);
+        await saveDeferred.promise;
+      });
+
+      expect(frozenPlan.weeks[0].schedule[0].exercises[0].name).toBe(
+        "Bench Press"
+      );
+      expect(latestPlan).not.toBe(frozenPlan);
+      expect(latestPlan.weeks[0].schedule[0].exercises[0].name).toBe(
+        "Dumbbell Press"
+      );
+
+      expect(screen.getByText("WK 1/4")).not.toBeNull();
+      expect(
+        screen
+          .getByRole("button", { name: "Week 1" })
+          .getAttribute("aria-pressed")
+      ).toBe("true");
+      expect(
+        screen
+          .getByRole("button", { name: "Week 2" })
+          .getAttribute("aria-pressed")
+      ).toBe("false");
+
+      const openDialog = screen.getByRole("dialog");
+      expect(
+        within(openDialog).getByRole("heading", { name: "Dumbbell Press" })
+      ).not.toBeNull();
+      const updatedSwapBtn = within(openDialog).getByRole("button", {
+        name: "Swap Dumbbell Press",
+      });
+      expect(updatedSwapBtn.getAttribute("aria-expanded")).toBe("false");
+
+      fireEvent.click(updatedSwapBtn);
+      expect(
+        within(openDialog).getByRole("button", { name: "Bench Press" })
+      ).not.toBeNull();
+    });
+
+    it("propagates swap save failures into DayDetailModal alert with Retry instead of swallowing them", async () => {
+      const frozenPlan = deepFreeze(makeMultiWeekPlan(2, 4));
+      firestoreServiceMock.saveUserData
+        .mockRejectedValueOnce(new Error("Cloud write failed"))
+        .mockResolvedValueOnce(undefined);
+
+      render(<StatefulDashboardHarness initialPlan={frozenPlan} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Week 1" }));
+      fireEvent.click(
+        screen.getByRole("button", { name: "View Monday workout details" })
+      );
+      const dialog = screen.getByRole("dialog");
+
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: "Swap Bench Press" })
+      );
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: "Dumbbell Press" })
+      );
+
+      const alert = await within(dialog).findByRole("alert");
+      expect(alert.textContent).toContain("Cloud write failed");
+      expect(
+        within(dialog).getByRole("heading", { name: "Bench Press" })
+      ).not.toBeNull();
+
+      await act(async () => {
+        fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+        await Promise.resolve();
+      });
+
+      expect(firestoreServiceMock.saveUserData).toHaveBeenCalledTimes(2);
+      expect(within(dialog).queryByRole("alert")).toBeNull();
+      expect(
+        within(dialog).getByRole("heading", { name: "Dumbbell Press" })
+      ).not.toBeNull();
+      expect(screen.getByText("WK 1/4")).not.toBeNull();
+    });
+  });
+
+  describe("cloud sync status banners", () => {
+    it("renders a polite status banner while cloud sync is pending and no alert or Retry Sync", () => {
+      renderDashboard({
+        user: { uid: "user-1" },
+        isSynced: false,
+        syncError: null,
+      });
+
+      const status = screen.getByRole("status");
+      expect(status.textContent).toContain("Syncing your cloud data...");
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.queryByRole("button", { name: "Retry Sync" })).toBeNull();
+    });
+
+    it("renders an alert banner with Retry Sync when cloud sync fails and does not mask it with a syncing banner", () => {
+      const retrySync = vi.fn();
+      renderDashboard({
+        user: { uid: "user-1" },
+        isSynced: false,
+        syncError: new Error("Failed to reach Firestore"),
+        retrySync,
+      });
+
+      const alert = screen.getByRole("alert");
+      expect(alert.textContent).toContain("Failed to reach Firestore");
+      expect(screen.queryByRole("status")).toBeNull();
+      expect(screen.queryByText(/syncing your cloud data/i)).toBeNull();
+
+      const retryBtn = within(alert).getByRole("button", {
+        name: "Retry Sync",
+      });
+      fireEvent.click(retryBtn);
+      expect(retrySync).toHaveBeenCalledTimes(1);
+    });
   });
 });

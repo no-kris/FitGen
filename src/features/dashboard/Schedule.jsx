@@ -29,13 +29,16 @@ export default function Schedule({
             {!done && (
               <>
                 <Button
+                  type="button"
                   onClick={() => setDetails(index)}
                   Icon={Settings}
                   iconSize={20}
                   className="px-2 py-1 btn-muted"
                   text=""
+                  aria-label={`View ${day.dayName} workout details`}
                 />
                 <Button
+                  type="button"
                   onClick={() =>
                     onStartWorkout({
                       ...day,
@@ -46,6 +49,7 @@ export default function Schedule({
                   iconSize={20}
                   className="px-2 py-1 btn-primary"
                   text=""
+                  aria-label={`Start ${day.dayName} workout`}
                 />
               </>
             )}

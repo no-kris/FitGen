@@ -28,6 +28,8 @@ const ACTIVE_KEY = "fitgen:active:v1";
 const LEGACY_ACTIVE_KEY = "fitgen-active";
 const SYNC_PENDING_ERROR =
   "Still syncing your data from the cloud. Please try again in a moment.";
+const SYNC_FAILED_ERROR =
+  "Cloud sync failed. Please retry sync before saving changes.";
 
 function createDeferred() {
   let resolve;
@@ -104,7 +106,7 @@ function renderUseWorkout(overrides = {}) {
   const contextValue = {
     user: "user" in overrides ? overrides.user : { uid: "user-1" },
     isSynced: "isSynced" in overrides ? overrides.isSynced : true,
-    syncError: null,
+    syncError: "syncError" in overrides ? overrides.syncError : null,
     userData: userDataState,
     setUserData,
     setView,
@@ -202,6 +204,85 @@ describe("useWorkout", () => {
           result.current.handleReplaceExercise(0, 0, 0, "Dumbbell Press")
         )
       ).rejects.toThrow(SYNC_PENDING_ERROR);
+
+      expect(firestoreServiceMock.saveUserData).not.toHaveBeenCalled();
+      expect(setUserData).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("sync guard when user is signed in and syncError is set", () => {
+    it("rejects handleFinishWorkout with sync-failed error without writing to Firestore or clearing state", async () => {
+      localStorage.setItem(
+        ACTIVE_KEY,
+        JSON.stringify({
+          weekNumber: 1,
+          dayNumber: 1,
+          dayName: "Monday",
+          focus: "Push",
+          workout: { weekNumber: 1, dayNumber: 1, dayName: "Monday" },
+          logs: [],
+          elapsed: 120,
+        })
+      );
+
+      const { result, setUserData, setActiveWorkout, setView } =
+        renderUseWorkout({
+          isSynced: false,
+          syncError: new Error("Firestore unavailable"),
+        });
+
+      await expect(
+        Promise.resolve().then(() =>
+          result.current.handleFinishWorkout({
+            workout: {
+              weekNumber: 1,
+              dayNumber: 1,
+              dayName: "Monday",
+              focus: "Push",
+            },
+            logs: [],
+            duration: 120,
+          })
+        )
+      ).rejects.toThrow(SYNC_FAILED_ERROR);
+
+      expect(firestoreServiceMock.addWorkout).not.toHaveBeenCalled();
+      expect(firestoreServiceMock.saveUserData).not.toHaveBeenCalled();
+      expect(setUserData).not.toHaveBeenCalled();
+      expect(setActiveWorkout).not.toHaveBeenCalled();
+      expect(setView).not.toHaveBeenCalled();
+      expect(localStorage.getItem(ACTIVE_KEY)).not.toBeNull();
+    });
+
+    it("rejects handleGenerateNextWeek with sync-failed error without calling model or Firestore", async () => {
+      const { result, setUserData, setView } = renderUseWorkout({
+        isSynced: false,
+        syncError: new Error("Firestore unavailable"),
+      });
+
+      await expect(
+        Promise.resolve().then(() =>
+          result.current.handleGenerateNextWeek("Felt great")
+        )
+      ).rejects.toThrow(SYNC_FAILED_ERROR);
+
+      expect(generateNextWeekPlanMock).not.toHaveBeenCalled();
+      expect(firestoreServiceMock.saveUserData).not.toHaveBeenCalled();
+      expect(setUserData).not.toHaveBeenCalled();
+      expect(setView).not.toHaveBeenCalled();
+    });
+
+    it("rejects handleReplaceExercise with sync-failed error without writing to Firestore or mutating state", async () => {
+      const { result, setUserData } = renderUseWorkout({
+        isSynced: false,
+        syncError: new Error("Firestore unavailable"),
+      });
+
+      await expect(
+        Promise.resolve().then(() =>
+          result.current.handleReplaceExercise(0, 0, 0, "Dumbbell Press")
+        )
+      ).rejects.toThrow(SYNC_FAILED_ERROR);
 
       expect(firestoreServiceMock.saveUserData).not.toHaveBeenCalled();
       expect(setUserData).not.toHaveBeenCalled();

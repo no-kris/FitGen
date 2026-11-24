@@ -7,6 +7,8 @@ import { useAppContext } from "../context/AppContext";
 
 const SYNC_PENDING_ERROR =
   "Still syncing your data from the cloud. Please try again in a moment.";
+const SYNC_FAILED_ERROR =
+  "Cloud sync failed. Please retry sync before saving changes.";
 
 function syncSavedLogsWithDay(savedLogs, day) {
   if (!Array.isArray(savedLogs)) {
@@ -38,15 +40,29 @@ function syncSavedLogsWithDay(savedLogs, day) {
 }
 
 export function useWorkout() {
-  const { user, isSynced, userData, setUserData, setView, setActiveWorkout } =
-    useAppContext();
+  const {
+    user,
+    isSynced,
+    syncError,
+    userData,
+    setUserData,
+    setView,
+    setActiveWorkout,
+  } = useAppContext();
   const { plan, profile, history } = userData;
   const isFinishingRef = useRef(false);
 
-  const handleGenerateNextWeek = async (feedback) => {
+  const assertCloudSynced = () => {
     if (user && !isSynced) {
+      if (syncError) {
+        throw new Error(SYNC_FAILED_ERROR);
+      }
       throw new Error(SYNC_PENDING_ERROR);
     }
+  };
+
+  const handleGenerateNextWeek = async (feedback) => {
+    assertCloudSynced();
 
     const result = await generateNextWeekPlan(
       profile,
@@ -77,9 +93,7 @@ export function useWorkout() {
     exerciseIndex,
     newExerciseName
   ) => {
-    if (user && !isSynced) {
-      throw new Error(SYNC_PENDING_ERROR);
-    }
+    assertCloudSynced();
 
     const newPlan = {
       ...plan,
@@ -199,9 +213,7 @@ export function useWorkout() {
     if (isFinishingRef.current) {
       return null;
     }
-    if (user && !isSynced) {
-      throw new Error(SYNC_PENDING_ERROR);
-    }
+    assertCloudSynced();
 
     isFinishingRef.current = true;
     try {
