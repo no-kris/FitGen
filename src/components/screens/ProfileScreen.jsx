@@ -13,6 +13,7 @@ import TextInput from "../ui/TextInput";
 import DeleteAccountModal from "../../features/auth/DeleteAccountModal";
 import { useAuth } from "../../hooks/useAuth";
 import { useAppContext } from "../../context/AppContext";
+import normalizeProfileText from "../../utils/normalizeProfileText";
 
 export default function ProfileScreen() {
   const {
@@ -45,13 +46,16 @@ export default function ProfileScreen() {
       ? Scale
       : Weight;
 
+  const exclusions = normalizeProfileText(profile?.exclusions);
+  const priorities = normalizeProfileText(profile?.priorities);
+
   const planDetails = [
     `Equipment: ${profile.equipment}`,
-    profile.exclusions !== "None"
-      ? `Exclusions: ${profile.exclusions}`
+    exclusions !== "None"
+      ? `Exclusions: ${exclusions}`
       : "No exclusions requested",
-    profile.priorities !== "None"
-      ? `Priorities: ${profile.priorities}`
+    priorities !== "None"
+      ? `Priorities: ${priorities}`
       : "No priorities requested",
   ];
 

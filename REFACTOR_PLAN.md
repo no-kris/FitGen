@@ -7,11 +7,11 @@ This plan is split into seven phases. Each phase can ship on its own and leaves 
 | 0 | Reproduce and get set up | Partial (`refactor/phase-1` branch created; `firestore.rules` not yet in repo) | Fixing the wrong cause |
 | 1 | Make workout saves reliable | **Done** (`de9720a`) | Users keep losing workouts |
 | 2 | Remove guest mode | **Code done** (manual Firebase Console & cleanup runbook pending) | Guest data keeps piling up in the cloud; the AI endpoint can be abused |
-| 3 | Fix smaller bugs | Partial (8 of 12 items landed: 2 in Phase 1, 3 in Group 1, 3 in Group 2) | Wrong plans, broken timers, unsafe account deletion |
+| 3 | Fix smaller bugs | **Code done** (12 of 12 items landed: 2 in Phase 1, 3 in Group 1, 3 in Group 2, 2 in Group 3, 2 in Group 4; manual smoke checks pending) | Wrong plans, broken timers, unsafe account deletion |
 | 4 | One data layer | Pending (`activeWorkoutStore` landed in Phase 1) | New features bring back the save bugs |
 | 5 | Move AI work to the server | Pending | Prompt abuse, malformed plans |
 | 6 | Clean up the app shell | Pending (`Button` `...rest` in Phase 1; `TextInput` `...rest` in Phase 3 Group 2) | Slow re-renders, scattered logic |
-| 7 | Tests and tooling | In progress (Vitest + RTL + 22 suites / 323 tests across Phases 1–3 Group 2) | Things break again without anyone noticing |
+| 7 | Tests and tooling | In progress (Vitest + RTL + 27 suites / 423 tests across Phases 1–3) | Things break again without anyone noticing |
 
 ---
 
@@ -110,7 +110,7 @@ This plan is split into seven phases. Each phase can ship on its own and leaves 
 
 ---
 
-## Phase 3: Fix smaller bugs
+## Phase 3: Fix smaller bugs — **Code done** (manual smoke checks pending)
 
 **Goal:** Fix known bugs that don't depend on the new data structure.
 
@@ -118,18 +118,22 @@ This plan is split into seven phases. Each phase can ship on its own and leaves 
 - [x] **Rest timer parsing:** `parseInt(exercise.rest)` turns "2-3m" into 2 seconds, and "N/A" into `NaN`, which never ends the timer. Add `parseRestSeconds()`: handle `s`/`m`/ranges (use the upper end), and default to 90. *(Done in Phase 3 Group 1: added `src/utils/parseRestSeconds.js` and wired into `WorkoutCard.jsx` and defensively into `RestTimer.jsx`.)*
 - [x] **Sets parsing:** `parseInt(e.sets)` returns `NaN` for values like "AMRAP", which creates zero rows. Default to 3. *(Done in Phase 3 Group 1: added `src/utils/parseSetsCount.js` and wired into `ActiveWorkout.jsx` and `useWorkout.js`.)*
 - [x] **Errors from next-week generation are swallowed:** `handleGenerateNextWeek` catches its own errors. Pass them on so `PlanDashboard` can show them. *(Done in Phase 1.)*
-- [ ] **Week tab jumps:** `PlanDashboard`'s `useEffect([plan])` moves to the last week whenever the plan changes. Only do this when `plan.weeks.length` grows. *(Group 3)*
-- [ ] **Props edited in place:** Remove `details.exercises[index].name = alt` from `DayDetailModal`. *(Group 3)*
+- [x] **Week tab jumps:** `PlanDashboard`'s `useEffect([plan])` moves to the last week whenever the plan changes. Only do this when `plan.weeks.length` grows. *(Done in Phase 3 Group 3, `511b5b9`: `PlanDashboard.jsx` uses render-time `prevWeeksLength` tracking + clamped `activeWeekIndex` so the tab advances only when `plan.weeks.length` grows.)*
+- [x] **Props edited in place:** Remove `details.exercises[index].name = alt` from `DayDetailModal`. *(Done in Phase 3 Group 3, `511b5b9`: removed in-place mutation in `DayDetailModal.jsx`; awaits `onReplaceExercise` with synchronous `isReplacingRef` guard, pending/error Retry UI, and distinct sync banners.)*
 - [x] **Account deletion order:** Re-authenticate first (`authService.reauthenticate` exists but isn't used), then delete the Firestore data, then the Auth user. Never leave an account with its data already deleted. *(Done in Phase 3 Group 2: added `DeleteAccountModal.jsx`, chunked `firestoreService.deleteUserData`, and strict `reauthenticate -> deleteUserData -> deleteAccount -> cleanup` in `useAuth.handleDeleteAccount`.)*
 - [x] **Reset Program wipes history:** Reset should clear only `plan` and `profile`. History is separate now, after Phase 1. *(Done in Phase 3 Group 2: added `firestoreService.resetUserProgram`, null-safe `useCloudSync` hydration + `retrySync`, and updated `App.handleResetSystem` + `ProfileScreen.jsx` to clear only `plan`/`profile` and paused workout while preserving `history`.)*
 - [x] **Logout leaves data behind:** Clear `fitgen-active*` keys on logout. *(Done in Phase 3 Group 2: `activeWorkoutStore.clear()` sweeps all `fitgen-active*`/`fitgen:active*` keys; wired across `useAuth.handleLogout`, `App.clearStorage`, and `App.handleLogoutEvent`.)*
-- [ ] **Exclusions/priorities type:** Default them to `""` instead of `[]`, and treat empty as "None" in both the prompt and `ProfileScreen`. *(Group 4)*
-- [ ] **Setup errors:** `errors ? ...` is always truthy, and errors never clear after a step passes. Reset them when moving to the next step. *(Group 4)*
+- [x] **Exclusions/priorities type:** Default them to `""` instead of `[]`, and treat empty as "None" in both the prompt and `ProfileScreen`. *(Done in Phase 3 Group 4: defaulted `exclusions`/`priorities` to `""` in `ProfileSetupForm.jsx`, added backward-compatible `src/utils/normalizeProfileText.js`, and wired it into `generateInitialPlan.js` and `ProfileScreen.jsx`.)*
+- [x] **Setup errors:** `errors ? ...` is always truthy, and errors never clear after a step passes. Reset them when moving to the next step. *(Done in Phase 3 Group 4: replaced always-truthy check with `errorEntries.length > 0` inside `role="alert"` in `ProfileSetupForm.jsx`, cleared errors on valid step progression in `handleNextStep.js` plus Back/retry, and added accessible pending/Retry and distinct cloud-sync banners.)*
 - [x] **Exercise swap crashes when there are no alternatives:** Guard `exercise.alternatives` in `handleReplaceExercise`. *(Done in Phase 1.)*
 
 **Group 1 verification:** `npm test` (21/21 files, 280/280 tests), `npx eslint src api` (exit 0), `npm run build` (exit 0), `grep -rn sessionDuration src` (0 matches). Run artifacts in `docs/orchestrator-runs/phase-3-group-1-workout-parsing-and-duration-2026-11-23/`.
 
 **Group 2 verification:** `npm test` (22/22 files, 323/323 tests), `npx eslint src api` (exit 0), `npm run build` (exit 0), 8/8 frozen suites `HOLD`. Run artifacts in `docs/orchestrator-runs/phase-3-group-2-account-lifecycle-and-hygiene-2026-11-24/`.
+
+**Group 3 verification:** `npm test` (23/23 files, 343/343 tests), `npx eslint src api` (exit 0), `npm run build` (exit 0), 3/3 frozen suites `HOLD`. Run artifacts in `docs/orchestrator-runs/phase-3-group-3-dashboard-and-plan-viewing-ui-2026-11-24/`.
+
+**Group 4 verification:** `npm test` (27/27 files, 423/423 tests), `npx eslint src api` (exit 0), `npm run build` (exit 0), 5/5 frozen suites `HOLD`. Run artifacts in `docs/orchestrator-runs/phase-3-group-4-onboarding-and-profile-form-bugs-2026-11-24/`.
 
 **Done when:** Each item has been checked by hand (or covered by a unit test in Phase 7).
 
@@ -193,7 +197,7 @@ This plan is split into seven phases. Each phase can ship on its own and leaves 
 
 **Goal:** Keep the fixes from breaking again.
 
-- [x] Add Vitest and React Testing Library. *(Added with 22 test suites / 323 passing tests across Phases 1–3 Group 2, plus `scripts/**/*.test.js` in `vitest.config.js`.)*
+- [x] Add Vitest and React Testing Library. *(Added with 27 test suites / 423 passing tests across Phases 1–3, plus `scripts/**/*.test.js` and `mcp/**/*.test.js` in `vitest.config.js`.)*
 - [ ] Write unit tests for `parseRestSeconds`, `extractJsonFromText`, `validatePlan`, `stripUndefined`, and the active-workout store's key logic. *(`stripUndefined`, `activeWorkoutStore`, and `parseRestSeconds` tests done; `extractJsonFromText` and `validatePlan` remain.)*
 - [ ] Add Firestore rules tests with `@firebase/rules-unit-testing` and the emulator: the owner can read and write, other users and anonymous users can't.
 - [ ] Add a GitHub Action that runs lint, tests and build on each PR.

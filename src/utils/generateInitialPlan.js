@@ -1,10 +1,11 @@
 import callModel from "../services/api/callModel";
 import getUserToken from "./getUserToken";
+import normalizeProfileText from "./normalizeProfileText";
 
 const generateInitialPlan = async (formData) => {
   const days = formData.selectedDays.join(", ");
-  const exclusions = formData.exclusions ? formData.exclusions : "None";
-  const priorities = formData.priorities ? formData.priorities : "None";
+  const exclusions = normalizeProfileText(formData.exclusions);
+  const priorities = normalizeProfileText(formData.priorities);
 
   const getEquipmentInstruction = (equipment) => {
     switch (equipment.toLowerCase()) {
@@ -91,12 +92,8 @@ const generateInitialPlan = async (formData) => {
     } minute duration.
     3. **Alternatives:** Every exercise MUST have 3 valid alternatives using ONLY available equipment.
     4. **Specificity:** ${getGoalInstruction(formData.goal)}
-    5. **Safety:** DOUBLE-CHECK Exclusions: '${
-      exclusions || "None"
-    }'. If user excludes "Running", do NOT include treadmill warmups. If "Shoulder Pain", avoid overhead pressing.
-    6. **Focus:** DOUBLE-CHECK Prioritize: '${
-      priorities || "Any"
-    }'. If user prioritizes "Legs", focus on leg exercises.
+    5. **Safety:** DOUBLE-CHECK Exclusions: '${exclusions}'. If user excludes "Running", do NOT include treadmill warmups. If "Shoulder Pain", avoid overhead pressing.
+    6. **Focus:** DOUBLE-CHECK Prioritize: '${priorities}'. If user prioritizes "Legs", focus on leg exercises.
    `;
 
   const token = await getUserToken();

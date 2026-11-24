@@ -394,4 +394,95 @@ describe("ProfileScreen", () => {
       }
     });
   });
+
+  describe("exclusions and priorities display", () => {
+    it.each([
+      { label: "empty string", value: "" },
+      { label: "whitespace string", value: "   " },
+      { label: "legacy empty array", value: [] },
+      { label: "legacy empty and None array", value: ["", "None"] },
+      { label: "canonical None", value: "None" },
+      { label: "lowercase none", value: "none" },
+      { label: "null", value: null },
+      { label: "undefined", value: undefined },
+    ])(
+      'displays "No exclusions requested" and "No priorities requested" when values are $label',
+      ({ value }) => {
+        const base = createContextValue();
+        render(
+          <AppContext.Provider
+            value={createContextValue({
+              userData: {
+                ...base.userData,
+                profile: {
+                  ...base.userData.profile,
+                  exclusions: value,
+                  priorities: value,
+                },
+              },
+            })}
+          >
+            <ProfileScreen />
+          </AppContext.Provider>
+        );
+
+        expect(screen.getByText("No exclusions requested")).toBeTruthy();
+        expect(screen.getByText("No priorities requested")).toBeTruthy();
+        expect(screen.queryByText(/Exclusions:/i)).toBeNull();
+        expect(screen.queryByText(/Priorities:/i)).toBeNull();
+        expect(screen.queryByText(/undefined/i)).toBeNull();
+        expect(screen.queryByText(/null/i)).toBeNull();
+      }
+    );
+
+    it("displays trimmed non-empty string exclusions and priorities", () => {
+      const base = createContextValue();
+      render(
+        <AppContext.Provider
+          value={createContextValue({
+            userData: {
+              ...base.userData,
+              profile: {
+                ...base.userData.profile,
+                exclusions: "knee pain",
+                priorities: "  legs, back  ",
+              },
+            },
+          })}
+        >
+          <ProfileScreen />
+        </AppContext.Provider>
+      );
+
+      const exclusionsItem = screen.getByText("Exclusions: knee pain");
+      const prioritiesItem = screen.getByText("Priorities: legs, back");
+      expect(exclusionsItem.textContent).toBe("Exclusions: knee pain");
+      expect(prioritiesItem.textContent).toBe("Priorities: legs, back");
+      expect(screen.queryByText("No exclusions requested")).toBeNull();
+      expect(screen.queryByText("No priorities requested")).toBeNull();
+    });
+
+    it("displays joined legacy non-empty array exclusions and priorities", () => {
+      const base = createContextValue();
+      render(
+        <AppContext.Provider
+          value={createContextValue({
+            userData: {
+              ...base.userData,
+              profile: {
+                ...base.userData.profile,
+                exclusions: ["knee pain", "shoulder"],
+                priorities: ["legs", "core"],
+              },
+            },
+          })}
+        >
+          <ProfileScreen />
+        </AppContext.Provider>
+      );
+
+      expect(screen.getByText("Exclusions: knee pain, shoulder")).toBeTruthy();
+      expect(screen.getByText("Priorities: legs, core")).toBeTruthy();
+    });
+  });
 });

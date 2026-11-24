@@ -16,7 +16,10 @@ const handleNextStep = (step, totalSteps, setStep, formData, setErrors) => {
       }
       break;
     case 3:
-      if (!formData.selectedDays.length) {
+      if (
+        !Array.isArray(formData.selectedDays) ||
+        !formData.selectedDays.length
+      ) {
         isValid = false;
         newErrors.selectedDays = "At least one day is required";
       }
@@ -28,13 +31,13 @@ const handleNextStep = (step, totalSteps, setStep, formData, setErrors) => {
       }
       break;
     case 5:
-      if (!formData.duration) {
+      if (!formData.duration || formData.duration <= 0) {
         isValid = false;
         newErrors.duration = "Duration is required";
       }
       break;
     case 6:
-      if (!formData.weeks) {
+      if (!formData.weeks || formData.weeks <= 0) {
         isValid = false;
         newErrors.weeks = "Weeks is required";
       }
@@ -42,7 +45,8 @@ const handleNextStep = (step, totalSteps, setStep, formData, setErrors) => {
   }
 
   if (isValid) {
-    setStep((step) => Math.min(totalSteps, step + 1));
+    setErrors({});
+    setStep((prevStep) => Math.min(totalSteps, prevStep + 1));
   } else {
     setErrors(newErrors);
   }
