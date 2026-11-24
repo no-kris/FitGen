@@ -18,6 +18,82 @@ const SYNC_FAILED_SAVE_PLAN_ERROR =
 const SYNC_FAILED_RESET_ERROR =
   "Cloud sync failed. Please retry sync before resetting your program.";
 
+function createEmptyDocSlice(nextId = 1) {
+  return {
+    committed: { plan: null, profile: null },
+    committedPlanId: 0,
+    committedProfileId: 0,
+    pending: [],
+    nextId,
+  };
+}
+
+function computeDocState(slice) {
+  let plan = slice.committed.plan;
+  let profile = slice.committed.profile;
+
+  for (const patch of slice.pending) {
+    if (patch.hasPlan && patch.id > slice.committedPlanId) {
+      plan = patch.plan;
+    }
+    if (patch.hasProfile && patch.id > slice.committedProfileId) {
+      profile = patch.profile;
+    }
+  }
+
+  return { plan, profile };
+}
+
+function buildOptimisticWorkoutEntry(id, rawEntry, fallbackCompletedAt = "") {
+  const entry = rawEntry && typeof rawEntry === "object" ? rawEntry : {};
+  const nested =
+    entry.workout && typeof entry.workout === "object" ? entry.workout : {};
+
+  const rawWeek = entry.weekNumber ?? nested.weekNumber;
+  const weekNumber =
+    typeof rawWeek === "number" && Number.isFinite(rawWeek) && rawWeek >= 0
+      ? Math.trunc(rawWeek)
+      : 0;
+
+  const rawDayNumber = entry.dayNumber ?? nested.dayNumber;
+  const dayNumber =
+    typeof rawDayNumber === "number" && Number.isFinite(rawDayNumber)
+      ? Math.trunc(rawDayNumber)
+      : null;
+
+  const rawDayName = entry.dayName ?? nested.dayName;
+  const dayName = typeof rawDayName === "string" ? rawDayName : "";
+
+  const rawFocus = entry.focus ?? nested.focus;
+  const focus = typeof rawFocus === "string" ? rawFocus : "";
+
+  const logs = Array.isArray(entry.logs) ? entry.logs : [];
+
+  const rawDuration = entry.duration;
+  const duration =
+    typeof rawDuration === "number" &&
+    Number.isFinite(rawDuration) &&
+    rawDuration >= 0
+      ? rawDuration
+      : 0;
+
+  const rawCompletedAt =
+    entry.completedAt ?? nested.date ?? fallbackCompletedAt;
+  const completedAt =
+    typeof rawCompletedAt === "string" ? rawCompletedAt : "";
+
+  return {
+    id,
+    weekNumber,
+    dayNumber,
+    dayName,
+    focus,
+    logs,
+    duration,
+    completedAt,
+  };
+}
+
 export function useUserData(user, options = {}) {
   const { onSyncComplete } = options || {};
   const uid = user?.uid ?? null;
@@ -35,6 +111,9 @@ export function useUserData(user, options = {}) {
   const currentUidRef = useRef(uid);
   const localDataRef = useRef(dataState);
   const onSyncCompleteRef = useRef(onSyncComplete);
+  const sessionEpochRef = useRef(0);
+  const docSliceRef = useRef(createEmptyDocSlice(1));
+  const optimisticWorkoutSeqRef = useRef(1);
 
   if (uid !== prevUid) {
     setPrevUid(uid);
@@ -65,10 +144,18 @@ export function useUserData(user, options = {}) {
     if (!uid) {
       return;
     }
+    sessionEpochRef.current += 1;
+    docSliceRef.current = {
+      ...docSliceRef.current,
+      pending: [],
+    };
     setSyncAttempt((prev) => prev + 1);
   }, [uid]);
 
   useEffect(() => {
+    sessionEpochRef.current += 1;
+    docSliceRef.current = createEmptyDocSlice(docSliceRef.current.nextId);
+
     if (!uid) {
       return;
     }
@@ -92,13 +179,14 @@ export function useUserData(user, options = {}) {
           return;
         }
 
+        let hydratedProfile = null;
+        let hydratedPlan = null;
+        let hydratedWorkouts = EMPTY_WORKOUTS;
+
         if (cloudData || cloudWorkouts.length > 0) {
-          setDataState({
-            ownerUid: uid,
-            profile: cloudData?.profile ?? null,
-            plan: cloudData?.plan ?? null,
-            workouts: cloudWorkouts,
-          });
+          hydratedProfile = cloudData?.profile ?? null;
+          hydratedPlan = cloudData?.plan ?? null;
+          hydratedWorkouts = cloudWorkouts;
           finalHasPlan = Boolean(cloudData?.plan);
         } else {
           const currentLocal = localDataRef.current;
@@ -113,23 +201,31 @@ export function useUserData(user, options = {}) {
             if (!isMounted) {
               return;
             }
-            setDataState({
-              ownerUid: uid,
-              profile: currentLocal.profile ?? null,
-              plan: currentLocal.plan ?? null,
-              workouts: EMPTY_WORKOUTS,
-            });
+            hydratedProfile = currentLocal.profile ?? null;
+            hydratedPlan = currentLocal.plan ?? null;
+            hydratedWorkouts = EMPTY_WORKOUTS;
             finalHasPlan = Boolean(currentLocal.plan);
           } else {
-            setDataState({
-              ownerUid: uid,
-              profile: null,
-              plan: null,
-              workouts: EMPTY_WORKOUTS,
-            });
             finalHasPlan = false;
           }
         }
+
+        docSliceRef.current = {
+          committed: {
+            plan: hydratedPlan,
+            profile: hydratedProfile,
+          },
+          committedPlanId: 0,
+          committedProfileId: 0,
+          pending: [],
+          nextId: docSliceRef.current.nextId,
+        };
+        setDataState({
+          ownerUid: uid,
+          profile: hydratedProfile,
+          plan: hydratedPlan,
+          workouts: hydratedWorkouts,
+        });
 
         if (isMounted) {
           setSyncState({
@@ -197,63 +293,213 @@ export function useUserData(user, options = {}) {
     [uid, status]
   );
 
+  const runOptimisticDocWrite = useCallback(
+    async ({ writeUid, patchSpec, writeFn }) => {
+      if (!writeUid) {
+        const slice = docSliceRef.current;
+        const nextCommitted = {
+          plan: patchSpec.hasPlan ? patchSpec.plan : slice.committed.plan,
+          profile: patchSpec.hasProfile
+            ? patchSpec.profile
+            : slice.committed.profile,
+        };
+        docSliceRef.current = {
+          committed: nextCommitted,
+          committedPlanId: 0,
+          committedProfileId: 0,
+          pending: [],
+          nextId: slice.nextId,
+        };
+        setDataState((prev) => ({
+          ...prev,
+          ownerUid: null,
+          plan: nextCommitted.plan,
+          profile: nextCommitted.profile,
+        }));
+        return;
+      }
+
+      const writeEpoch = sessionEpochRef.current;
+      const patchId = docSliceRef.current.nextId++;
+      const patch = { id: patchId, ...patchSpec };
+      docSliceRef.current.pending.push(patch);
+
+      const optimistic = computeDocState(docSliceRef.current);
+      setDataState((prev) => ({
+        ...prev,
+        ownerUid: writeUid,
+        plan: optimistic.plan,
+        profile: optimistic.profile,
+      }));
+
+      try {
+        await writeFn();
+        if (
+          sessionEpochRef.current === writeEpoch &&
+          currentUidRef.current === writeUid
+        ) {
+          const slice = docSliceRef.current;
+          if (patch.hasPlan && patchId > slice.committedPlanId) {
+            slice.committed = { ...slice.committed, plan: patch.plan };
+            slice.committedPlanId = patchId;
+          }
+          if (patch.hasProfile && patchId > slice.committedProfileId) {
+            slice.committed = { ...slice.committed, profile: patch.profile };
+            slice.committedProfileId = patchId;
+          }
+          slice.pending = slice.pending.filter((item) => item.id !== patchId);
+          const nextDoc = computeDocState(slice);
+          setDataState((prev) => ({
+            ...prev,
+            ownerUid: writeUid,
+            plan: nextDoc.plan,
+            profile: nextDoc.profile,
+          }));
+        }
+      } catch (err) {
+        if (
+          sessionEpochRef.current === writeEpoch &&
+          currentUidRef.current === writeUid
+        ) {
+          const slice = docSliceRef.current;
+          slice.pending = slice.pending.filter((item) => item.id !== patchId);
+          const rolledBack = computeDocState(slice);
+          setDataState((prev) => ({
+            ...prev,
+            ownerUid: writeUid,
+            plan: rolledBack.plan,
+            profile: rolledBack.profile,
+          }));
+        }
+        throw err;
+      }
+    },
+    []
+  );
+
   const savePlan = useCallback(
     async (nextPlan, nextProfile) => {
       assertReadyForWrite(SYNC_FAILED_SAVE_PLAN_ERROR);
       const writeUid = uid;
-      if (writeUid) {
-        await firestoreService.saveUserData(writeUid, {
+      await runOptimisticDocWrite({
+        writeUid,
+        patchSpec: {
+          hasPlan: true,
           plan: nextPlan,
+          hasProfile: true,
           profile: nextProfile,
-        });
-      }
-      if (currentUidRef.current === writeUid) {
-        setDataState((prev) => ({
-          ...prev,
-          ownerUid: writeUid,
-          plan: nextPlan,
-          profile: nextProfile,
-        }));
-      }
+        },
+        writeFn: () =>
+          firestoreService.saveUserData(writeUid, {
+            plan: nextPlan,
+            profile: nextProfile,
+          }),
+      });
       return { plan: nextPlan, profile: nextProfile };
     },
-    [assertReadyForWrite, uid]
+    [assertReadyForWrite, runOptimisticDocWrite, uid]
   );
 
   const updatePlan = useCallback(
     async (nextPlan) => {
       assertReadyForWrite(SYNC_FAILED_DEFAULT_ERROR);
       const writeUid = uid;
-      if (writeUid) {
-        await firestoreService.saveUserData(writeUid, { plan: nextPlan });
-      }
-      if (currentUidRef.current === writeUid) {
-        setDataState((prev) => ({
-          ...prev,
-          ownerUid: writeUid,
+      await runOptimisticDocWrite({
+        writeUid,
+        patchSpec: {
+          hasPlan: true,
           plan: nextPlan,
-        }));
-      }
+          hasProfile: false,
+          profile: undefined,
+        },
+        writeFn: () =>
+          firestoreService.saveUserData(writeUid, { plan: nextPlan }),
+      });
       return nextPlan;
     },
-    [assertReadyForWrite, uid]
+    [assertReadyForWrite, runOptimisticDocWrite, uid]
   );
 
   const addWorkout = useCallback(
     async (workoutPayload) => {
       assertReadyForWrite(SYNC_FAILED_DEFAULT_ERROR);
       const writeUid = uid;
-      const savedEntry = writeUid
-        ? await firestoreService.addWorkout(writeUid, workoutPayload)
-        : { id: `local-${Date.now()}`, ...workoutPayload };
-      if (currentUidRef.current === writeUid) {
+
+      if (!writeUid) {
+        const localId = `local-${Date.now()}-${optimisticWorkoutSeqRef.current++}`;
+        const localEntry = buildOptimisticWorkoutEntry(
+          localId,
+          workoutPayload,
+          new Date().toISOString()
+        );
         setDataState((prev) => ({
           ...prev,
-          ownerUid: writeUid,
-          workouts: [...prev.workouts, savedEntry],
+          ownerUid: null,
+          workouts: [...prev.workouts, localEntry],
         }));
+        return localEntry;
       }
-      return savedEntry;
+
+      const writeEpoch = sessionEpochRef.current;
+      const tempId = `__optimistic_workout_${optimisticWorkoutSeqRef.current++}`;
+      const optimisticEntry = buildOptimisticWorkoutEntry(
+        tempId,
+        workoutPayload,
+        new Date().toISOString()
+      );
+
+      setDataState((prev) => ({
+        ...prev,
+        ownerUid: writeUid,
+        workouts: [...prev.workouts, optimisticEntry],
+      }));
+
+      try {
+        const savedEntry = await firestoreService.addWorkout(
+          writeUid,
+          workoutPayload
+        );
+        if (
+          sessionEpochRef.current === writeEpoch &&
+          currentUidRef.current === writeUid
+        ) {
+          setDataState((prev) => {
+            let replaced = false;
+            const nextWorkouts = prev.workouts.map((entry) => {
+              if (entry.id === tempId) {
+                replaced = true;
+                return savedEntry;
+              }
+              return entry;
+            });
+            if (
+              !replaced &&
+              (savedEntry?.id == null ||
+                !nextWorkouts.some((entry) => entry.id === savedEntry.id))
+            ) {
+              nextWorkouts.push(savedEntry);
+            }
+            return {
+              ...prev,
+              ownerUid: writeUid,
+              workouts: nextWorkouts,
+            };
+          });
+        }
+        return savedEntry;
+      } catch (err) {
+        if (
+          sessionEpochRef.current === writeEpoch &&
+          currentUidRef.current === writeUid
+        ) {
+          setDataState((prev) => ({
+            ...prev,
+            ownerUid: writeUid,
+            workouts: prev.workouts.filter((entry) => entry.id !== tempId),
+          }));
+        }
+        throw err;
+      }
     },
     [assertReadyForWrite, uid]
   );
@@ -261,26 +507,31 @@ export function useUserData(user, options = {}) {
   const resetProgram = useCallback(async () => {
     assertReadyForWrite(SYNC_FAILED_RESET_ERROR);
     const writeUid = uid;
-    if (writeUid) {
-      await firestoreService.resetUserProgram(writeUid);
-    }
-    if (currentUidRef.current === writeUid) {
-      setDataState((prev) => ({
-        ...prev,
-        ownerUid: writeUid,
-        profile: null,
+    await runOptimisticDocWrite({
+      writeUid,
+      patchSpec: {
+        hasPlan: true,
         plan: null,
-      }));
-    }
-  }, [assertReadyForWrite, uid]);
+        hasProfile: true,
+        profile: null,
+      },
+      writeFn: () => firestoreService.resetUserProgram(writeUid),
+    });
+  }, [assertReadyForWrite, runOptimisticDocWrite, uid]);
 
   const deleteAll = useCallback(async () => {
     if (!uid) {
       throw new Error("User ID is required to delete user data.");
     }
     const writeUid = uid;
+    const writeEpoch = sessionEpochRef.current;
     const result = await firestoreService.deleteUserData(writeUid);
-    if (currentUidRef.current === writeUid) {
+    if (
+      sessionEpochRef.current === writeEpoch &&
+      currentUidRef.current === writeUid
+    ) {
+      sessionEpochRef.current += 1;
+      docSliceRef.current = createEmptyDocSlice(docSliceRef.current.nextId);
       setDataState({
         ownerUid: writeUid,
         profile: null,
@@ -292,6 +543,8 @@ export function useUserData(user, options = {}) {
   }, [uid]);
 
   const clearLocalData = useCallback(() => {
+    sessionEpochRef.current += 1;
+    docSliceRef.current = createEmptyDocSlice(docSliceRef.current.nextId);
     setDataState(EMPTY_DATA_STATE);
   }, []);
 

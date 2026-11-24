@@ -254,6 +254,109 @@ describe("ProfileScreen", () => {
       });
       expect(handleResetSystem).toHaveBeenCalledTimes(2);
     });
+
+    it("renders safely without throwing when userData.profile is transiently null during an in-flight optimistic reset and supports error + Retry on rollback", async () => {
+      // 1) Direct null-profile render safety
+      expect(() =>
+        render(
+          <AppContext.Provider
+            value={createContextValue({
+              userData: { profile: null, plan: null, history: [] },
+            })}
+          >
+            <ProfileScreen />
+          </AppContext.Provider>
+        )
+      ).not.toThrow();
+
+      expect(screen.getByRole("button", { name: "RESET SYSTEM" })).toBeTruthy();
+      expect(screen.getByText(/0 DAYS\/WEEK/i)).toBeTruthy();
+      expect(screen.getByText("No exclusions requested")).toBeTruthy();
+      expect(screen.getByText("No priorities requested")).toBeTruthy();
+      expect(screen.queryByText(/undefined/i)).toBeNull();
+      expect(screen.queryByText(/null/i)).toBeNull();
+
+      cleanup();
+
+      // 2) Full in-flight optimistic reset transition: populated -> transient null -> rollback with error + Retry -> success
+      const firstResetDeferred = createDeferred();
+      const handleResetSystem = vi
+        .fn()
+        .mockReturnValueOnce(firstResetDeferred.promise)
+        .mockResolvedValueOnce(undefined);
+
+      const baseContext = createContextValue({ handleResetSystem });
+      const { rerender } = render(
+        <AppContext.Provider value={baseContext}>
+          <ProfileScreen />
+        </AppContext.Provider>
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "RESET SYSTEM" }));
+      const dialog = screen.getByRole("dialog", { name: "Reset Program?" });
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: "Reset Program" })
+      );
+
+      expect(handleResetSystem).toHaveBeenCalledTimes(1);
+
+      // Simulate optimistic resetProgram setting userData.profile & plan to null while App pins ProfileScreen
+      expect(() =>
+        rerender(
+          <AppContext.Provider
+            value={{
+              ...baseContext,
+              userData: {
+                profile: null,
+                plan: null,
+                history: baseContext.userData.history,
+              },
+            }}
+          >
+            <ProfileScreen />
+          </AppContext.Provider>
+        )
+      ).not.toThrow();
+
+      const openDialog = screen.getByRole("dialog", { name: "Reset Program?" });
+      const resettingBtn = within(openDialog).getByRole("button", {
+        name: /resetting/i,
+      });
+      expect(resettingBtn.disabled).toBe(true);
+      expect(resettingBtn.getAttribute("aria-busy")).toBe("true");
+
+      // Simulate Firestore rejection + rollback restoring profile
+      await act(async () => {
+        firstResetDeferred.reject(new Error("Optimistic reset failed"));
+        await Promise.resolve();
+      });
+
+      rerender(
+        <AppContext.Provider value={baseContext}>
+          <ProfileScreen />
+        </AppContext.Provider>
+      );
+
+      const alert = await within(
+        screen.getByRole("dialog", { name: "Reset Program?" })
+      ).findByRole("alert");
+      expect(alert.textContent).toContain("Optimistic reset failed");
+      expect(screen.getByText("Build Muscle")).toBeTruthy();
+
+      const retryBtn = within(
+        screen.getByRole("dialog", { name: "Reset Program?" })
+      ).getByRole("button", { name: "Retry" });
+      expect(retryBtn.disabled).toBe(false);
+
+      fireEvent.click(retryBtn);
+
+      await waitFor(() => {
+        expect(
+          screen.queryByRole("dialog", { name: "Reset Program?" })
+        ).toBeNull();
+      });
+      expect(handleResetSystem).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe("Delete Account modal integration", () => {

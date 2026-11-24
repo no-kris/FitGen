@@ -17,12 +17,16 @@ function App() {
   const [view, setView] = useState("welcome");
   const [showAuth, setShowAuth] = useState(false);
   const [activeWorkout, setActiveWorkout] = useState(null);
+  const [isSavingPlan, setIsSavingPlan] = useState(false);
+  const [isResettingProgram, setIsResettingProgram] = useState(false);
   const clearLocalDataRef = useRef(null);
 
   const clearStorage = () => {
     clearLocalDataRef.current?.();
     setActiveWorkout(null);
     activeWorkoutStore.clear();
+    setIsSavingPlan(false);
+    setIsResettingProgram(false);
   };
 
   const handleLogoutEvent = () => {
@@ -64,15 +68,25 @@ function App() {
   );
 
   const handleSavePlan = async (nextPlan, nextProfile) => {
-    await savePlan(nextPlan, nextProfile);
-    setView("plan");
+    setIsSavingPlan(true);
+    try {
+      await savePlan(nextPlan, nextProfile);
+      setView("plan");
+    } finally {
+      setIsSavingPlan(false);
+    }
   };
 
   const handleResetSystem = async () => {
-    await resetProgram();
-    activeWorkoutStore.clear();
-    setActiveWorkout(null);
-    setView("profile");
+    setIsResettingProgram(true);
+    try {
+      await resetProgram();
+      activeWorkoutStore.clear();
+      setActiveWorkout(null);
+      setView("profile");
+    } finally {
+      setIsResettingProgram(false);
+    }
   };
 
   const contextValue = {
@@ -118,7 +132,11 @@ function App() {
             )}
             {view === "profile" && (
               <div className="view-container">
-                {userData.plan ? <ProfileScreen /> : <ProfileSetupForm />}
+                {(userData.plan || isResettingProgram) && !isSavingPlan ? (
+                  <ProfileScreen />
+                ) : (
+                  <ProfileSetupForm />
+                )}
               </div>
             )}
             {view === "active" && activeWorkout && (

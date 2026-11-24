@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { useEffect } from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, waitFor, act, cleanup } from "@testing-library/react";
+import { render, screen, waitFor, act, cleanup } from "@testing-library/react";
 import { useAppContext } from "./context/AppContext";
 
 const authMocks = vi.hoisted(() => ({
@@ -278,6 +278,198 @@ describe("App handleSavePlan, handleResetSystem, and sync guards", () => {
     });
     expect(contextStore.value.userData.plan.programName).toBe("Plan B");
     expect(contextStore.value.plan.programName).toBe("Plan B");
+  });
+
+  it("handleSavePlan shows optimistic plan/profile while pinning Profile Setup View until resolve, and rolls back cleanly on reject", async () => {
+    firestoreServiceMock.getUserData.mockResolvedValueOnce(null);
+    firestoreServiceMock.getWorkouts.mockResolvedValueOnce([]);
+
+    render(<App />);
+
+    await act(async () => {
+      authCallbacks.listener({ uid: "user-opt-save", isAnonymous: false });
+    });
+
+    await waitFor(() => {
+      expect(contextStore.value.isSynced).toBe(true);
+      expect(contextStore.value.view).toBe("profile");
+    });
+
+    expect(screen.getByText("Profile Setup View")).toBeTruthy();
+    expect(screen.queryByText("Profile View")).toBeNull();
+
+    // 1) In-flight write that fails: optimistic state is visible while Profile Setup View stays pinned
+    const failDeferred = createDeferred();
+    firestoreServiceMock.saveUserData.mockReturnValueOnce(failDeferred.promise);
+
+    const draftPlan = { programName: "Optimistic Draft", weeks: [] };
+    const draftProfile = { goal: "Build Muscle" };
+
+    let pendingFail;
+    act(() => {
+      pendingFail = contextStore.value.handleSavePlan(draftPlan, draftProfile);
+    });
+    const caughtFail = pendingFail.catch((err) => err);
+
+    expect(contextStore.value.plan).toEqual(draftPlan);
+    expect(contextStore.value.profile).toEqual(draftProfile);
+    expect(contextStore.value.userData.plan).toEqual(draftPlan);
+    expect(contextStore.value.userData.profile).toEqual(draftProfile);
+    expect(contextStore.value.view).toBe("profile");
+    expect(screen.getByText("Profile Setup View")).toBeTruthy();
+    expect(screen.queryByText("Profile View")).toBeNull();
+
+    await act(async () => {
+      failDeferred.reject(new Error("Cloud save failed"));
+      await caughtFail;
+    });
+
+    expect((await caughtFail).message).toBe("Cloud save failed");
+    expect(contextStore.value.plan).toBeNull();
+    expect(contextStore.value.profile).toBeNull();
+    expect(contextStore.value.userData.plan).toBeNull();
+    expect(contextStore.value.userData.profile).toBeNull();
+    expect(contextStore.value.view).toBe("profile");
+    expect(screen.getByText("Profile Setup View")).toBeTruthy();
+    expect(screen.queryByText("Profile View")).toBeNull();
+
+    // 2) Retry that resolves: stays pinned while pending, then switches to Plan View on resolve
+    const okDeferred = createDeferred();
+    firestoreServiceMock.saveUserData.mockReturnValueOnce(okDeferred.promise);
+
+    let pendingOk;
+    act(() => {
+      pendingOk = contextStore.value.handleSavePlan(draftPlan, draftProfile);
+    });
+
+    expect(contextStore.value.plan).toEqual(draftPlan);
+    expect(contextStore.value.profile).toEqual(draftProfile);
+    expect(contextStore.value.view).toBe("profile");
+    expect(screen.getByText("Profile Setup View")).toBeTruthy();
+    expect(screen.queryByText("Profile View")).toBeNull();
+
+    await act(async () => {
+      okDeferred.resolve(undefined);
+      await pendingOk;
+    });
+
+    await waitFor(() => {
+      expect(contextStore.value.view).toBe("plan");
+    });
+    expect(screen.getByText("Plan View")).toBeTruthy();
+    expect(contextStore.value.plan).toEqual(draftPlan);
+    expect(contextStore.value.profile).toEqual(draftProfile);
+  });
+
+  it("handleResetSystem optimistically clears plan/profile while pinning Profile View until resolve, rolls back on reject, and mounts Profile Setup View on resolve", async () => {
+    const existingPlan = { programName: "PPL", weeks: [] };
+    const existingProfile = { goal: "Build Muscle" };
+    const existingHistory = [
+      {
+        id: "w-1",
+        weekNumber: 1,
+        dayNumber: 1,
+        dayName: "Monday",
+        focus: "Push",
+        logs: [],
+        duration: 1800,
+        completedAt: "2026-11-20T10:00:00.000Z",
+      },
+    ];
+    firestoreServiceMock.getUserData.mockResolvedValueOnce({
+      plan: existingPlan,
+      profile: existingProfile,
+    });
+    firestoreServiceMock.getWorkouts.mockResolvedValueOnce(existingHistory);
+
+    localStorage.setItem("fitgen:active:v1", JSON.stringify({ weekNumber: 1 }));
+
+    render(<App />);
+
+    await act(async () => {
+      authCallbacks.listener({ uid: "user-opt-reset", isAnonymous: false });
+    });
+
+    await waitFor(() => {
+      expect(contextStore.value.isSynced).toBe(true);
+      expect(contextStore.value.view).toBe("plan");
+    });
+
+    const active = { dayName: "Monday", weekNumber: 1 };
+    act(() => {
+      contextStore.value.setActiveWorkout(active);
+      contextStore.value.setView("profile");
+    });
+
+    expect(screen.getByText("Profile View")).toBeTruthy();
+    expect(screen.queryByText("Profile Setup View")).toBeNull();
+
+    // 1) In-flight reset that fails: plan/profile are optimistically null, workouts preserved, Profile View pinned
+    const failDeferred = createDeferred();
+    firestoreServiceMock.resetUserProgram.mockReturnValueOnce(
+      failDeferred.promise
+    );
+
+    let pendingFail;
+    act(() => {
+      pendingFail = contextStore.value.handleResetSystem();
+    });
+    const caughtFail = pendingFail.catch((err) => err);
+
+    expect(contextStore.value.plan).toBeNull();
+    expect(contextStore.value.profile).toBeNull();
+    expect(contextStore.value.userData.plan).toBeNull();
+    expect(contextStore.value.userData.profile).toBeNull();
+    expect(contextStore.value.workouts).toEqual(existingHistory);
+    expect(contextStore.value.activeWorkout).toEqual(active);
+    expect(localStorage.getItem("fitgen:active:v1")).not.toBeNull();
+    expect(screen.getByText("Profile View")).toBeTruthy();
+    expect(screen.queryByText("Profile Setup View")).toBeNull();
+
+    await act(async () => {
+      failDeferred.reject(new Error("Reset write rejected"));
+      await caughtFail;
+    });
+
+    expect((await caughtFail).message).toBe("Reset write rejected");
+    expect(contextStore.value.plan).toEqual(existingPlan);
+    expect(contextStore.value.profile).toEqual(existingProfile);
+    expect(contextStore.value.workouts).toEqual(existingHistory);
+    expect(contextStore.value.activeWorkout).toEqual(active);
+    expect(localStorage.getItem("fitgen:active:v1")).not.toBeNull();
+    expect(screen.getByText("Profile View")).toBeTruthy();
+    expect(screen.queryByText("Profile Setup View")).toBeNull();
+
+    // 2) Retry reset that resolves: stays pinned while pending, then clears activeWorkout/storage and mounts Profile Setup View
+    const okDeferred = createDeferred();
+    firestoreServiceMock.resetUserProgram.mockReturnValueOnce(
+      okDeferred.promise
+    );
+
+    let pendingOk;
+    act(() => {
+      pendingOk = contextStore.value.handleResetSystem();
+    });
+
+    expect(contextStore.value.plan).toBeNull();
+    expect(contextStore.value.profile).toBeNull();
+    expect(contextStore.value.workouts).toEqual(existingHistory);
+    expect(screen.getByText("Profile View")).toBeTruthy();
+    expect(screen.queryByText("Profile Setup View")).toBeNull();
+
+    await act(async () => {
+      okDeferred.resolve(undefined);
+      await pendingOk;
+    });
+
+    expect(contextStore.value.plan).toBeNull();
+    expect(contextStore.value.profile).toBeNull();
+    expect(contextStore.value.workouts).toEqual(existingHistory);
+    expect(contextStore.value.activeWorkout).toBeNull();
+    expect(localStorage.getItem("fitgen:active:v1")).toBeNull();
+    expect(contextStore.value.view).toBe("profile");
+    expect(screen.getByText("Profile Setup View")).toBeTruthy();
+    expect(screen.queryByText("Profile View")).toBeNull();
   });
 
   it("handleResetSystem awaits resetUserProgram, clears plan/profile/activeWorkout/active storage, preserves history, and switches view to profile", async () => {

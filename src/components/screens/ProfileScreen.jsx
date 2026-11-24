@@ -44,10 +44,17 @@ export default function ProfileScreen() {
   const isSyncFailed = Boolean(user && !isSynced && syncError);
   const isSyncPending = Boolean(user && !isSynced && !syncError);
 
+  const goal = profile?.goal ?? "";
+  const level = profile?.level ?? "";
+  const selectedDaysCount = Array.isArray(profile?.selectedDays)
+    ? profile.selectedDays.length
+    : 0;
+  const equipment = profile?.equipment ?? "";
+
   const Icon =
-    profile.goal.toLowerCase() === "build muscle"
+    goal.toLowerCase() === "build muscle"
       ? Dumbbell
-      : profile.goal.toLowerCase() === "lose weight"
+      : goal.toLowerCase() === "lose weight"
       ? Scale
       : Weight;
 
@@ -55,7 +62,7 @@ export default function ProfileScreen() {
   const priorities = normalizeProfileText(profile?.priorities);
 
   const planDetails = [
-    `Equipment: ${profile.equipment}`,
+    `Equipment: ${equipment}`,
     exclusions !== "None"
       ? `Exclusions: ${exclusions}`
       : "No exclusions requested",
@@ -125,10 +132,10 @@ export default function ProfileScreen() {
           <div className="card p-6 mb-8">
             <Icon size={46} className="mb-4 text-primary" />
             <h2 className="text-2xl font-bold mb-2 uppercase">
-              {profile.goal}
+              {goal}
             </h2>
             <p className="text-base text-muted uppercase">
-              {profile.level} // {profile.selectedDays.length} DAYS/WEEK
+              {level} // {selectedDaysCount} DAYS/WEEK
             </p>
             <div className="flex flex-col text-center gap-4 mt-4">
               <ul className="text-lg font-bold text-primary uppercase letter-spacing-2 line-height-2 list-none">
