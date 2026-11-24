@@ -52,5 +52,6 @@ These apply to the agent the user talks to directly, not to subagents.
 - The prompt you were given defines your role and what you may edit.
 - Only `implementer` edits product JavaScript code, only `styler` edits CSS and style classes, and only `tester` edits test code. `data`, `domain`, `ui`, and `api` design changes as specs; `verifier` and `reviewer` report.
 - If you need a change you are not allowed to make, describe it in your `HANDOFF` block instead. Do not work around a denied edit with shell commands.
-- **Command execution (fail-closed):** If a required gate or evidence command (`git hash-object`, `npm test`, `npx eslint`, `npm run build`, `git diff`) cannot run, stop with `status: blocked` and report the exact error — never degrade silently by copying another role's hashes or substituting manual review.
+- **MCP verification tools:** Each subagent receives its own least-privilege `fitgen-dev-tools` MCP server (via `inheritMcp: false` and scoped `--tools` / `--git-modes` flags). Prefer `call_mcp_tool` on `fitgen-dev-tools` over `run_command` for your role's allowed checks.
+- **Command execution (fail-closed):** If a required gate or evidence command (`git hash-object`, `npm test`, `npx eslint`, `npm run build`, `git diff`) cannot run via MCP or shell, stop with `status: blocked` and report the exact error — never degrade silently by copying another role's hashes or substituting manual review.
 - Do not write to `.memory/`, whatever `SCOPE.md` says, unless your agent file allows it.

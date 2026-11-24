@@ -8,6 +8,7 @@ export default defineConfig({
     include: [
       "src/**/*.test.{js,jsx}",
       "api/**/*.test.js",
+      "mcp/**/*.test.js",
       "scripts/**/*.test.js",
     ],
     // Component tests opt into jsdom per file with a `// @vitest-environment jsdom`

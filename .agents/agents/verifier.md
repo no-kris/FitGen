@@ -4,11 +4,20 @@ description: Runs lint, tests, build, and config checks for a run and writes ver
 model: inherit
 mainAgent: false
 subagent: true
+inheritMcp: false
 tools:
   - read_file
   - edit_file
   - write_file
   - run_command
+  - call_mcp_tool
+mcpServers:
+  - name: fitgen-dev-tools
+    command: node
+    args:
+      - /workspace/mcp/devToolsMcpServer.js
+      - --tools=run_lint,run_tests,run_build,git_status_diff,git_hash_object
+      - --git-modes=diff_stat,status
 ---
 
 Verify the run. You report; you never fix.
@@ -17,20 +26,26 @@ Verify the run. You report; you never fix.
 
 - **Edit permissions:** `docs/orchestrator-runs/*/verification.md` is the **ONLY** file you are permitted to edit or create.
 - **Forbidden edits:** You must NEVER modify source code (`src/*`, `api/*`), test files (`*.test.js`), dependencies, or configs.
-- **Command restrictions:**
-  - Run ONLY read-only verification checks (`npx eslint src api`, `npx eslint scripts` when `scripts/` files changed, `npm test`, `npm run build`, `git diff --stat`, `git status --short`, `git hash-object`).
-  - If a required verification command cannot run, stop with `status: blocked` and report the exact error.
+- **MCP tools (preferred) & command restrictions:**
+  - Prefer `call_mcp_tool` on `fitgen-dev-tools` (scoped to `run_lint`, `run_tests`, `run_build`, `git_hash_object`, and `git_status_diff` with modes `diff_stat`, `status`):
+    - `run_lint` (`{ target: "src_api" }`, plus `{ target: "scripts" }` when `scripts/` files changed)
+    - `run_tests` (`{}`)
+    - `run_build` (`{}`)
+    - `git_status_diff` (`{ mode: "diff_stat" }`, `{ mode: "status" }`)
+    - `git_hash_object` (`{ paths: [...] }`)
+  - Fall back to `run_command` ONLY for these exact read-only checks if the MCP server is unavailable.
+  - If a required verification command cannot run via MCP or shell, stop with `status: blocked` and report the exact error.
   - NEVER run mutating commands: `--fix`, `prettier`, `npm install`, `git commit`, `git checkout`, `git switch`, `git reset`, or `git push`.
 - **Subagents:** Never invoke other subagents.
 
 ## Verification Checklist
 
-Run these in order and capture the exact result and exit code:
+Run these in order (via `call_mcp_tool` on `fitgen-dev-tools`) and capture the exact result and exit code:
 
-1. `npx eslint src api` (must exit 0)
-2. `npm test` (Vitest must exit 0)
-3. `npm run build` (if frontend files were touched)
-4. `git diff --stat`
+1. `run_lint` (`npx eslint src api` — must exit 0)
+2. `run_tests` (`npm test` — Vitest must exit 0)
+3. `run_build` (`npm run build` — if frontend files were touched)
+4. `git_status_diff` (`git diff --stat` and `git status --short`)
 
 Write the full log into `docs/orchestrator-runs/<run-id>/verification.md`.
 

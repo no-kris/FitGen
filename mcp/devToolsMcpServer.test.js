@@ -3,6 +3,8 @@ import path from "node:path";
 import {
   DEFAULT_WORKSPACE_ROOT,
   TOOL_DEFINITIONS,
+  parseServerOptions,
+  getVisibleTools,
   validateWorkspacePath,
   validateTestFilePath,
   executeTool,
@@ -37,6 +39,67 @@ describe("devToolsMcpServer path validation", () => {
       "scripts/cleanupAnonymousUsers.test.js",
     );
     expect(() => validateTestFilePath("src/App.jsx", DEFAULT_WORKSPACE_ROOT)).toThrow(/\.test\.js/);
+  });
+});
+
+describe("devToolsMcpServer tool scoping", () => {
+  it("parses --tools and --git-modes flags and rejects unknown values", () => {
+    expect(parseServerOptions([])).toEqual({
+      allowedTools: null,
+      allowedGitModes: null,
+    });
+    expect(
+      parseServerOptions(["--tools=run_tests,git_hash_object", "--git-modes=status,rev_parse"]),
+    ).toEqual({
+      allowedTools: ["run_tests", "git_hash_object"],
+      allowedGitModes: ["status", "rev_parse"],
+    });
+    expect(parseServerOptions(["--tools", "run_lint,run_build"])).toEqual({
+      allowedTools: ["run_lint", "run_build"],
+      allowedGitModes: null,
+    });
+
+    expect(() => parseServerOptions(["--tools=bogus_tool"])).toThrow(/Unknown value/);
+    expect(() => parseServerOptions(["--git-modes=push"])).toThrow(/Unknown value/);
+    expect(() => parseServerOptions(["--tools="])).toThrow(/at least one/);
+    expect(() => parseServerOptions(["--unknown"])).toThrow(/Unknown CLI argument/);
+  });
+
+  it("filters tools/list and narrows git_status_diff enum when scoped", async () => {
+    const options = {
+      allowedTools: ["git_hash_object", "git_status_diff"],
+      allowedGitModes: ["rev_parse", "status"],
+    };
+
+    const visible = getVisibleTools(options);
+    expect(visible.map((t) => t.name)).toEqual(["git_hash_object", "git_status_diff"]);
+    expect(visible[1].inputSchema.properties.mode.enum).toEqual(["rev_parse", "status"]);
+
+    const listRes = await handleJsonRpcRequest({ jsonrpc: "2.0", id: 10, method: "tools/list" }, options);
+    expect(listRes.result.tools.map((t) => t.name)).toEqual(["git_hash_object", "git_status_diff"]);
+    expect(listRes.result.tools[1].inputSchema.properties.mode.enum).toEqual(["rev_parse", "status"]);
+  });
+
+  it("blocks disallowed tools and disallowed git modes at execution time", async () => {
+    const execFn = vi.fn().mockResolvedValue({ exitCode: 0, stdout: "", stderr: "" });
+    const options = {
+      execFn,
+      allowedTools: ["run_tests", "git_status_diff"],
+      allowedGitModes: ["status"],
+    };
+
+    const blockedTool = await executeTool("run_build", {}, options);
+    expect(blockedTool.isError).toBe(true);
+    expect(blockedTool.content[0].text).toContain("not permitted");
+
+    const blockedMode = await executeTool("git_status_diff", { mode: "diff" }, options);
+    expect(blockedMode.isError).toBe(true);
+    expect(blockedMode.content[0].text).toContain("not permitted");
+
+    const allowedCall = await executeTool("git_status_diff", { mode: "status" }, options);
+    expect(allowedCall.isError).toBeUndefined();
+    expect(execFn).toHaveBeenCalledTimes(1);
+    expect(execFn).toHaveBeenCalledWith("git", ["status", "--short"], DEFAULT_WORKSPACE_ROOT);
   });
 });
 

@@ -8,6 +8,10 @@
  *   - run_lint:        npx eslint src api | npx eslint scripts (never --fix)
  *   - run_build:       npm run build
  *   - git_status_diff: read-only git status --short | diff --stat | diff | rev-parse
+ *
+ * Optional CLI flags for per-subagent least-privilege scoping:
+ *   --tools=<comma-separated tool names>
+ *   --git-modes=<comma-separated git_status_diff modes>
  */
 
 import { execFile } from "node:child_process";
@@ -31,6 +35,8 @@ const SERVER_INFO = {
 const SUPPORTED_PROTOCOL_VERSION = "2024-11-05";
 const MAX_OUTPUT_BUFFER = 10 * 1024 * 1024;
 const COMMAND_TIMEOUT_MS = 120_000;
+
+export const ALL_GIT_MODES = ["status", "diff_stat", "diff", "rev_parse"];
 
 export const TOOL_DEFINITIONS = [
   {
@@ -103,7 +109,7 @@ export const TOOL_DEFINITIONS = [
       properties: {
         mode: {
           type: "string",
-          enum: ["status", "diff_stat", "diff", "rev_parse"],
+          enum: [...ALL_GIT_MODES],
           description:
             "`status` (`git status --short`), `diff_stat` (`git diff --stat`), `diff` (`git diff`), or `rev_parse` (current branch and HEAD commit).",
         },
@@ -119,6 +125,91 @@ export const TOOL_DEFINITIONS = [
     },
   },
 ];
+
+const ALL_TOOL_NAMES = new Set(TOOL_DEFINITIONS.map((t) => t.name));
+
+function parseCsvAllowlist(rawValue, validValues, flagName) {
+  const items = rawValue
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (items.length === 0) {
+    throw new Error(`${flagName} must specify at least one value.`);
+  }
+
+  for (const item of items) {
+    if (!validValues.has(item)) {
+      throw new Error(`Unknown value "${item}" for ${flagName}.`);
+    }
+  }
+
+  return [...new Set(items)];
+}
+
+/**
+ * Parses optional `--tools=<csv>` and `--git-modes=<csv>` CLI flags into allowlists.
+ */
+export function parseServerOptions(argv = []) {
+  let allowedTools = null;
+  let allowedGitModes = null;
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "--tools") {
+      if (i + 1 >= argv.length) {
+        throw new Error("--tools requires a comma-separated value.");
+      }
+      allowedTools = parseCsvAllowlist(argv[i + 1], ALL_TOOL_NAMES, "--tools");
+      i += 1;
+    } else if (arg.startsWith("--tools=")) {
+      allowedTools = parseCsvAllowlist(arg.slice("--tools=".length), ALL_TOOL_NAMES, "--tools");
+    } else if (arg === "--git-modes") {
+      if (i + 1 >= argv.length) {
+        throw new Error("--git-modes requires a comma-separated value.");
+      }
+      allowedGitModes = parseCsvAllowlist(argv[i + 1], new Set(ALL_GIT_MODES), "--git-modes");
+      i += 1;
+    } else if (arg.startsWith("--git-modes=")) {
+      allowedGitModes = parseCsvAllowlist(
+        arg.slice("--git-modes=".length),
+        new Set(ALL_GIT_MODES),
+        "--git-modes",
+      );
+    } else {
+      throw new Error(`Unknown CLI argument: ${arg}`);
+    }
+  }
+
+  return { allowedTools, allowedGitModes };
+}
+
+/**
+ * Returns the filtered tool definitions visible to the configured server instance.
+ */
+export function getVisibleTools({ allowedTools = null, allowedGitModes = null } = {}) {
+  const toolSet = allowedTools ? new Set(allowedTools) : null;
+  const gitModes = allowedGitModes ? [...allowedGitModes] : null;
+
+  return TOOL_DEFINITIONS.filter((tool) => !toolSet || toolSet.has(tool.name)).map((tool) => {
+    if (tool.name !== "git_status_diff" || !gitModes) {
+      return tool;
+    }
+    return {
+      ...tool,
+      inputSchema: {
+        ...tool.inputSchema,
+        properties: {
+          ...tool.inputSchema.properties,
+          mode: {
+            ...tool.inputSchema.properties.mode,
+            enum: gitModes,
+          },
+        },
+      },
+    };
+  });
+}
 
 /**
  * Validates that `inputPath` resolves inside `workspaceRoot`, is not a git/CLI flag,
@@ -215,10 +306,19 @@ function toolResult(text, isError = false) {
 export async function executeTool(
   name,
   args = {},
-  { workspaceRoot = DEFAULT_WORKSPACE_ROOT, execFn = runExecFile } = {},
+  {
+    workspaceRoot = DEFAULT_WORKSPACE_ROOT,
+    execFn = runExecFile,
+    allowedTools = null,
+    allowedGitModes = null,
+  } = {},
 ) {
   if (args === null || typeof args !== "object" || Array.isArray(args)) {
     return toolResult("Tool arguments must be an object.", true);
+  }
+
+  if (allowedTools && !allowedTools.includes(name)) {
+    return toolResult(`Tool "${name}" is not permitted for this server instance.`, true);
   }
 
   try {
@@ -282,9 +382,16 @@ export async function executeTool(
 
       case "git_status_diff": {
         const mode = args.mode;
-        if (!["status", "diff_stat", "diff", "rev_parse"].includes(mode)) {
+        if (!ALL_GIT_MODES.includes(mode)) {
           return toolResult(
             '`mode` must be one of "status", "diff_stat", "diff", or "rev_parse".',
+            true,
+          );
+        }
+
+        if (allowedGitModes && !allowedGitModes.includes(mode)) {
+          return toolResult(
+            `Git mode "${mode}" is not permitted for this server instance.`,
             true,
           );
         }
@@ -376,7 +483,7 @@ export async function handleJsonRpcRequest(message, options = {}) {
           jsonrpc: "2.0",
           id,
           result: {
-            tools: TOOL_DEFINITIONS,
+            tools: getVisibleTools(options),
           },
         };
 
@@ -474,5 +581,6 @@ const isDirectCli =
   process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename);
 
 if (isDirectCli) {
-  startStdioServer();
+  const cliOptions = parseServerOptions(process.argv.slice(2));
+  startStdioServer(cliOptions);
 }

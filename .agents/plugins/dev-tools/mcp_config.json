@@ -2,7 +2,7 @@
   "mcpServers": {
     "fitgen-dev-tools": {
       "command": "node",
-      "args": ["/workspace/scripts/devToolsMcpServer.js"]
+      "args": ["/workspace/mcp/devToolsMcpServer.js"]
     }
   }
 }
