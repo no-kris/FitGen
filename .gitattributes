@@ -1,0 +1,5 @@
+# Keep Linux-mounted Docker/container config files LF on Windows
+tinyproxy.conf text eol=lf
+filter text eol=lf
+Dockerfile text eol=lf
+*.sh text eol=lf
