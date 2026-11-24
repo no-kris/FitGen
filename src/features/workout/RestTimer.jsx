@@ -1,14 +1,16 @@
 import { ArrowRightCircle, Clock, PlusCircle } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import formatTimer from "../../utils/formatTimer";
+import parseRestSeconds from "../../utils/parseRestSeconds";
 import Button from "../../components/ui/Button";
 import { KeepAwake } from "@capacitor-community/keep-awake";
 
 export default function RestTimer({ restTime, onRestComplete }) {
-  const [timeLeft, setTimeLeft] = useState(restTime);
+  const initialRestTime = parseRestSeconds(restTime);
+  const [timeLeft, setTimeLeft] = useState(initialRestTime);
   //  `useRef` discards the value on subsequent renders.
   // eslint-disable-next-line
-  const endTimeRef = useRef(Date.now() + restTime * 1000);
+  const endTimeRef = useRef(Date.now() + initialRestTime * 1000);
 
   useEffect(() => {
     KeepAwake.keepAwake();

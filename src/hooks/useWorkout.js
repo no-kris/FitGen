@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import generateNextWeekPlan from "../utils/generateNextWeekPlan";
+import parseSetsCount from "../utils/parseSetsCount";
 import { firestoreService } from "../services/firebase/firestoreServices";
 import { activeWorkoutStore } from "../services/storage/activeWorkoutStore";
 import { useAppContext } from "../context/AppContext";
@@ -24,7 +25,7 @@ function syncSavedLogsWithDay(savedLogs, day) {
       };
     }
 
-    const setCount = parseInt(exercise.sets, 10) || 1;
+    const setCount = parseSetsCount(exercise.sets);
     return {
       name: exercise.name,
       sets: Array.from({ length: setCount }, () => ({

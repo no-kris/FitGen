@@ -13,13 +13,14 @@ vi.mock("./getUserToken", () => ({
 
 import generateNextWeekPlan from "./generateNextWeekPlan";
 
-function makeProfile() {
+function makeProfile(overrides = {}) {
   return {
     goal: "build muscle",
     level: "intermediate",
     equipment: "full gym",
     selectedDays: ["Monday", "Wednesday", "Friday"],
-    sessionDuration: 60,
+    duration: 60,
+    ...overrides,
   };
 }
 
@@ -132,5 +133,91 @@ describe("generateNextWeekPlan", () => {
     await expect(
       generateNextWeekPlan(makeProfile(), makePlan(), [], "")
     ).rejects.toThrow("Failed to generate valid plan data");
+  });
+
+  describe("profile.duration handling", () => {
+    it.each([
+      [45, 45],
+      [30, 30],
+      [90, 90],
+      [120, 120],
+      ["30", 30],
+      ["45", 45],
+      [" 30 ", 30],
+      [45.6, 46],
+    ])(
+      "uses canonical profile.duration (%j) -> %i minutes in the prompt",
+      async (inputDuration, expectedMinutes) => {
+        callModelMock.mockResolvedValueOnce({
+          weeks: [{ weekNumber: 2, schedule: [] }],
+        });
+
+        await generateNextWeekPlan(
+          makeProfile({ duration: inputDuration }),
+          makePlan(),
+          [],
+          ""
+        );
+
+        const [prompt] = callModelMock.mock.calls[0];
+        expect(prompt).toContain(
+          `Adjust volume to fit ${expectedMinutes} minutes.`
+        );
+      }
+    );
+
+    it.each([
+      { label: "omitted", duration: null, omit: true },
+      { label: "undefined", duration: undefined, omit: false },
+      { label: "null", duration: null, omit: false },
+      { label: "0", duration: 0, omit: false },
+      { label: "0.4", duration: 0.4, omit: false },
+      { label: "-15", duration: -15, omit: false },
+      { label: "-30", duration: -30, omit: false },
+      { label: "NaN", duration: NaN, omit: false },
+      { label: "Infinity", duration: Infinity, omit: false },
+      { label: "empty string", duration: "", omit: false },
+      { label: "whitespace string", duration: "   ", omit: false },
+      { label: "non-numeric string", duration: "invalid", omit: false },
+      { label: "boolean true", duration: true, omit: false },
+      { label: "boolean false", duration: false, omit: false },
+      { label: "object", duration: {}, omit: false },
+      { label: "array", duration: [45], omit: false },
+    ])(
+      "falls back to 60 minutes when profile.duration is $label",
+      async ({ duration, omit }) => {
+        callModelMock.mockResolvedValueOnce({
+          weeks: [{ weekNumber: 2, schedule: [] }],
+        });
+
+        const profile = makeProfile();
+        if (omit) {
+          delete profile.duration;
+        } else {
+          profile.duration = duration;
+        }
+
+        await generateNextWeekPlan(profile, makePlan(), [], "");
+
+        const [prompt] = callModelMock.mock.calls[0];
+        expect(prompt).toContain("Adjust volume to fit 60 minutes.");
+      }
+    );
+
+    it("ignores legacy alias field when profile.duration is omitted and falls back to 60 minutes", async () => {
+      callModelMock.mockResolvedValueOnce({
+        weeks: [{ weekNumber: 2, schedule: [] }],
+      });
+
+      const legacyField = ["session", "Duration"].join("");
+      const profile = makeProfile();
+      delete profile.duration;
+      profile[legacyField] = 45;
+
+      await generateNextWeekPlan(profile, makePlan(), [], "");
+
+      const [prompt] = callModelMock.mock.calls[0];
+      expect(prompt).toContain("Adjust volume to fit 60 minutes.");
+    });
   });
 });

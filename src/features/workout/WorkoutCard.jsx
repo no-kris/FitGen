@@ -4,6 +4,7 @@ import Button from "../../components/ui/Button";
 import RestTimer from "./RestTimer";
 import { useState } from "react";
 import { Haptics } from "@capacitor/haptics";
+import parseRestSeconds from "../../utils/parseRestSeconds";
 
 export default function WorkoutCard({ workout, logs, setLogs }) {
   const [activeRestTimerIndex, setActiveRestTimerIndex] = useState(null);
@@ -164,7 +165,7 @@ export default function WorkoutCard({ workout, logs, setLogs }) {
         </div>
         {activeRestTimerIndex === index && (
           <RestTimer
-            restTime={parseInt(exercise.rest)}
+            restTime={parseRestSeconds(exercise.rest)}
             onRestComplete={() => {
               triggerHaptic();
               setActiveRestTimerIndex(null);

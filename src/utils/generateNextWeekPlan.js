@@ -1,10 +1,27 @@
 import callModel from "../services/api/callModel";
 import getUserToken from "./getUserToken";
 
+const DEFAULT_DURATION_MINUTES = 60;
+
+const resolveDurationMinutes = (rawDuration) => {
+  if (
+    typeof rawDuration === "number" ||
+    (typeof rawDuration === "string" && rawDuration.trim() !== "")
+  ) {
+    const parsed = Number(rawDuration);
+    const rounded = Math.round(parsed);
+    if (Number.isFinite(parsed) && rounded > 0) {
+      return rounded;
+    }
+  }
+  return DEFAULT_DURATION_MINUTES;
+};
+
 const generateNextWeekPlan = async (profile, plan, history, feedback) => {
   const lastWeek = plan.weeks[plan.weeks.length - 1];
   const nextWeekNumber = lastWeek.weekNumber + 1;
   const days = profile.selectedDays.join(", ");
+  const targetDurationMinutes = resolveDurationMinutes(profile?.duration);
   const recentHistory = (history || [])
     .slice(-10)
     .map((log) => {
@@ -41,9 +58,7 @@ const generateNextWeekPlan = async (profile, plan, history, feedback) => {
     - If feedback is positive, apply progressive overload.
     - Write a 'coachNotes' field explaining EXACTLY how you adapted the plan based on their feedback and performance. Write in a slightly robotic or tactical tone.
     - Ensure workouts are scheduled on: ${days}.
-    - **CRITICAL**: Adjust volume to fit ${
-      profile.sessionDuration || 60
-    } minutes.
+    - **CRITICAL**: Adjust volume to fit ${targetDurationMinutes} minutes.
     - Provide an "alternatives" array (3 items) for every exercise.
 
     **OUTPUT FORMAT:**

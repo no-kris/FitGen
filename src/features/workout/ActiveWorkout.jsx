@@ -2,6 +2,7 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import Button from "../../components/ui/Button";
 import formatTimer from "../../utils/formatTimer";
+import parseSetsCount from "../../utils/parseSetsCount";
 import WorkoutCard from "./WorkoutCard";
 import Modal from "../../components/ui/Modal";
 import { useWorkout } from "../../hooks/useWorkout";
@@ -18,7 +19,7 @@ export default function ActiveWorkout() {
       workout.logs ||
       workout.exercises.map((e) => ({
         name: e.name,
-        sets: Array.from({ length: parseInt(e.sets) }, () => ({
+        sets: Array.from({ length: parseSetsCount(e.sets) }, () => ({
           weight: "",
           reps: "",
           completed: false,

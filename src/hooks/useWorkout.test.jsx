@@ -686,5 +686,55 @@ describe("useWorkout", () => {
       expect(setActiveWorkout).toHaveBeenCalledWith(wednesday);
       expect(setView).toHaveBeenCalledWith("active");
     });
+
+    it("synthesizes parsed set counts when saved.logs is shorter than day.exercises on resume", () => {
+      const savedLogs = [
+        {
+          name: "Bench Press",
+          sets: [{ weight: "135", reps: "10", completed: true }],
+        },
+      ];
+      localStorage.setItem(
+        ACTIVE_KEY,
+        JSON.stringify({
+          weekNumber: 1,
+          dayNumber: 1,
+          dayName: "Monday",
+          focus: "Push",
+          workout: { weekNumber: 1, dayNumber: 1, dayName: "Monday" },
+          logs: savedLogs,
+          elapsed: 240,
+        })
+      );
+
+      const { result, setActiveWorkout, setView } = renderUseWorkout();
+      const monday = {
+        weekNumber: 1,
+        dayNumber: 1,
+        dayName: "Monday",
+        focus: "Push",
+        exercises: [
+          { name: "Bench Press", sets: 3, reps: "10", rest: "90s" },
+          { name: "Push-ups", sets: "AMRAP", reps: "max", rest: "60s" },
+          { name: "Plank Hold", sets: -1, reps: "60s", rest: "60s" },
+          { name: "Dips", sets: "3-4", reps: "10-12", rest: "90s" },
+        ],
+      };
+
+      const outcome = result.current.handleStartWorkout(monday);
+
+      expect(outcome).toEqual({ status: "resumed" });
+      expect(setView).toHaveBeenCalledWith("active");
+      expect(setActiveWorkout).toHaveBeenCalledTimes(1);
+
+      const resumedArg = setActiveWorkout.mock.calls[0][0];
+      expect(resumedArg.logs).toHaveLength(4);
+      expect(resumedArg.logs[0].sets).toEqual([
+        { weight: "135", reps: "10", completed: true },
+      ]);
+      expect(resumedArg.logs[1].sets).toHaveLength(3);
+      expect(resumedArg.logs[2].sets).toHaveLength(3);
+      expect(resumedArg.logs[3].sets).toHaveLength(4);
+    });
   });
 });

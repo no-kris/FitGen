@@ -282,4 +282,39 @@ describe("ActiveWorkout", () => {
 
     expect(localStorage.getItem(ACTIVE_KEY)).toBeNull();
   });
+
+  describe("initial set row count parsing", () => {
+    it.each([
+      ["AMRAP", 3],
+      ["3-4", 4],
+      [0, 3],
+      [-2, 3],
+      [undefined, 3],
+      [2, 2],
+    ])(
+      "parses sets=%j and renders %i set rows when starting a fresh workout",
+      (setsValue, expectedRows) => {
+        const day = {
+          ...makeWorkoutDay(),
+          exercises: [
+            {
+              name: "Push-ups",
+              sets: setsValue,
+              reps: "AMRAP",
+              rest: "60s",
+            },
+          ],
+        };
+
+        renderActiveWorkout({ activeWorkout: day });
+
+        expect(screen.queryAllByPlaceholderText("WEIGHT")).toHaveLength(
+          expectedRows
+        );
+        expect(screen.queryAllByPlaceholderText("REPS")).toHaveLength(
+          expectedRows
+        );
+      }
+    );
+  });
 });
