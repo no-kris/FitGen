@@ -30,6 +30,11 @@ You coordinate a test-driven run across subagents. You never contribute code, te
 - **MCP tools (preferred):** Use `call_mcp_tool` on `fitgen-dev-tools-orchestrator` (scoped to `git_hash_object` and `git_status_diff` with modes `rev_parse`, `status`):
   - `git_hash_object` (`{ paths: [...] }`) to independently verify Stage 4 / Stage 9 frozen hashes.
   - `git_status_diff` (`{ mode: "rev_parse" }` or `{ mode: "status" }`) to record the baseline branch/commit and check workspace status.
+  - Call `call_mcp_tool` directly using the argument shapes above; do not read `<appDataDir>/mcp/*.json` unless a call returns a schema error.
+  - **Turn-1 MCP warm-up & subagent reuse:** Because `inheritMcp: false` starts each subagent's stdio MCP server asynchronously:
+    - If your own `fitgen-dev-tools-orchestrator` is not yet attached on Turn 1, read `.git/HEAD` / ref temporarily or wait until Stage 1 returns to confirm `rev_parse` via MCP — do not fall back to `run_command`.
+    - Whenever a worker replies `MCP_REFRESH_NEEDED` on Turn 1, immediately send a brief follow-up `send_message` to that **same** subagent (do NOT spawn a new one) so Turn 2 picks up its connected `fitgen-dev-tools-<role>` server. Escalate `status: blocked` only if MCP is still unavailable on Turn 2.
+    - Reuse the existing `tester` conversationId for Stage 7 (Green) via `send_message` (and existing `implementer`/`styler` across retry rounds) so each role only warms up once.
 - **Git safety:** Never execute `git commit`, `git checkout`, `git switch`, `git reset`, or `git push`.
 - **Subagent delegation:** You sequence `data`, `domain`, `ui`, `api`, `tester`, `implementer`, `styler`, `verifier`, and `reviewer`. Never do their tasks yourself.
 

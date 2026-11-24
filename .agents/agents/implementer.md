@@ -34,8 +34,9 @@ You receive an approved spec and edit production code to match the functional re
     - `run_tests` (`{}` or `{ files: [...] }`) for `npm test`.
     - `run_lint` (`{ target: "src_api" }` or `{ target: "scripts" }` when `scripts/*` is in `spec.md`) for `npx eslint`.
     - `run_build` (`{}`) for `npm run build`.
-  - Use `run_command` ONLY for spec-authorized single-file deletions (`rm <exact-path>`, never `rm -rf`) or as a fallback if the MCP server is unavailable.
-  - If a required verification or deletion command cannot run, fails, or times out, stop with `status: blocked` and report the exact error — never hand off with manual inspection in place of real `npm test` / `npx eslint` output.
+  - Call `call_mcp_tool` directly using the argument shapes above (do not read `<appDataDir>/mcp/*.json` unless a call returns a schema error). If `call_mcp_tool` is absent on Turn 1, finish reading and editing production files first, then reply `MCP_REFRESH_NEEDED` to `orchestrator` so Turn 2 picks up `fitgen-dev-tools-implementer` instead of falling back to `run_command`.
+  - Use `run_command` ONLY for spec-authorized single-file deletions (`rm <exact-path>`, never `rm -rf`) or as a fallback if the MCP server is still unavailable on Turn 2.
+  - If a required verification or deletion command cannot run (after Turn-2 refresh), fails, or times out, stop with `status: blocked` and report the exact error — never hand off with manual inspection in place of real `npm test` / `npx eslint` output.
   - NEVER execute git mutations (`git commit`, `git checkout`, `git switch`, `git reset`, `git push`).
 - **Subagents:** You are an individual worker; never invoke other subagents.
 

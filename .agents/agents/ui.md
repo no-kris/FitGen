@@ -27,8 +27,8 @@ You design UI and component structure. You read existing components and write th
 - **Forbidden edits:** NEVER edit product code, test files, configs, or dependencies.
 - **Read restrictions:** Never read or display `*.env` files.
 - **MCP tools (preferred) & command restrictions:**
-  - Prefer `call_mcp_tool` on `fitgen-dev-tools-ui` (scoped to `git_status_diff` with modes `status`, `diff_stat`, `diff`, `rev_parse`).
-  - Fall back to `run_command` ONLY for read-only git inspection (`git diff *`, `git status *`, `git log *`, `git show *`).
+  - Prefer `call_mcp_tool` on `fitgen-dev-tools-ui` (scoped to `git_status_diff` with modes `status`, `diff_stat`, `diff`, `rev_parse`). Call directly using `{ mode: "status" | "diff_stat" | "diff" | "rev_parse" }` (do not read `<appDataDir>/mcp/*.json` unless a call returns a schema error). If git inspection is needed and `call_mcp_tool` is absent on Turn 1, finish file reads first and reply `MCP_REFRESH_NEEDED` to `orchestrator` for Turn 2 instead of falling back to `run_command`.
+  - Fall back to `run_command` ONLY for read-only git inspection (`git diff *`, `git status *`, `git log *`, `git show *`) if the MCP server is still unavailable on Turn 2.
   - NEVER execute git mutations (`git commit`, `git checkout`, `git switch`, `git reset`, `git push`) or any build/test/lint runners.
 - **Subagents:** Never invoke other subagents.
 

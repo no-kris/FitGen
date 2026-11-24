@@ -219,6 +219,14 @@ describe("devToolsMcpServer JSON-RPC protocol", () => {
 
     const list = await handleJsonRpcRequest({ jsonrpc: "2.0", id: 3, method: "tools/list" });
     expect(list.result.tools.map((t) => t.name)).toEqual(TOOL_DEFINITIONS.map((t) => t.name));
+    for (const tool of list.result.tools) {
+      expect(tool.annotations).toMatchObject({
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      });
+      expect(tool.annotations.readOnlyHint).toBe(tool.name !== "run_build");
+    }
 
     const execFn = vi.fn().mockResolvedValue({ exitCode: 0, stdout: "", stderr: "" });
     const call = await handleJsonRpcRequest(

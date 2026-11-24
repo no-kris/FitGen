@@ -32,8 +32,9 @@ Verify the run. You report; you never fix.
     - `run_build` (`{}`)
     - `git_status_diff` (`{ mode: "diff_stat" }`, `{ mode: "status" }`)
     - `git_hash_object` (`{ paths: [...] }`)
-  - Fall back to `run_command` ONLY for these exact read-only checks if the MCP server is unavailable.
-  - If a required verification command cannot run via MCP or shell, stop with `status: blocked` and report the exact error.
+  - Call `call_mcp_tool` directly using the argument shapes above (do not read `<appDataDir>/mcp/*.json` unless a call returns a schema error). If `call_mcp_tool` is absent on Turn 1, do any needed file reads and reply `MCP_REFRESH_NEEDED` to `orchestrator` so Turn 2 picks up `fitgen-dev-tools-verifier` instead of falling back to `run_command`.
+  - Fall back to `run_command` ONLY for these exact read-only checks if the MCP server is still unavailable on Turn 2.
+  - If a required verification command cannot run via MCP (after Turn-2 refresh) or shell, stop with `status: blocked` and report the exact error.
   - NEVER run mutating commands: `--fix`, `prettier`, `npm install`, `git commit`, `git checkout`, `git switch`, `git reset`, or `git push`.
 - **Subagents:** Never invoke other subagents.
 
@@ -50,4 +51,4 @@ Write the full log into `docs/orchestrator-runs/<run-id>/verification.md`.
 
 ## Handoff
 
-End your report with the `HANDOFF` block defined in `AGENTS.md`.
+End your report with the `HANDOFF` block defined in `AGENTS.md` (use `open: orchestrator (Stage 9 Green Gate -> Stage 10 Reviewer)` when all checks pass).

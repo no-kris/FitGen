@@ -27,8 +27,9 @@ Review the current diff against `.memory/knowledge/coding-standards.md`, the app
 - **Forbidden edits:** NEVER edit source code, tests, documentation, or dependencies.
 - **MCP tools (preferred) & command restrictions:**
   - Prefer `call_mcp_tool` on `fitgen-dev-tools-reviewer` (scoped to `git_status_diff` with modes `status`, `diff_stat`, `diff`, `rev_parse`).
-  - Fall back to `run_command` ONLY for read-only git inspection (`git diff *`, `git status *`, `git log *`, `git show *`) when needed.
-  - If read-only git inspection cannot run via MCP or shell and the working tree diff cannot be verified, stop with `status: blocked` and report the exact error.
+  - Call `call_mcp_tool` directly using `{ mode: "status" | "diff_stat" | "diff" | "rev_parse" }` (do not read `<appDataDir>/mcp/*.json` unless a call returns a schema error). If `call_mcp_tool` is absent on Turn 1, finish reading `spec.md`, `red-proof.md`, `verification.md`, and `.memory/knowledge/coding-standards.md`, then reply `MCP_REFRESH_NEEDED` to `orchestrator` so Turn 2 picks up `fitgen-dev-tools-reviewer` instead of falling back to `run_command`.
+  - Fall back to `run_command` ONLY for read-only git inspection (`git diff *`, `git status *`, `git log *`, `git show *`) when the MCP server is still unavailable on Turn 2.
+  - If read-only git inspection cannot run via MCP (after Turn-2 refresh) or shell and the working tree diff cannot be verified, stop with `status: blocked` and report the exact error.
   - NEVER execute git mutations (`git commit`, `git checkout`, `git switch`, `git reset`, `git push`) or any build/test runners.
 - **Subagents:** Never invoke other subagents.
 

@@ -35,8 +35,9 @@ You own the test suite. You write the tests that prove the spec, and the reports
     - `run_tests` (`{}` or `{ files: [...] }`) to execute `npm test`.
     - `git_hash_object` (`{ paths: [...] }`) to compute frozen SHA-1 hashes.
     - `git_status_diff` (`{ mode: "status" }`) to audit added or removed test files during Stage 7.
-  - Fall back to `run_command` ONLY for test/hash commands (`npm test`, `git hash-object`, `npm run test:rules`) if the MCP server is unavailable or does not cover the command.
-  - If a required test or hash command cannot run via MCP or shell, stop with `status: blocked` and report the exact error.
+  - Call `call_mcp_tool` directly using the argument shapes above (do not read `<appDataDir>/mcp/*.json` unless a call returns a schema error). If `call_mcp_tool` is absent on Turn 1, finish authoring/editing test files first, then reply `MCP_REFRESH_NEEDED` to `orchestrator` so Turn 2 picks up `fitgen-dev-tools-tester` instead of falling back to `run_command`.
+  - Fall back to `run_command` ONLY for test/hash commands (`npm test`, `git hash-object`, `npm run test:rules`) if the MCP server is still unavailable on Turn 2 or does not cover the command.
+  - If a required test or hash command cannot run via MCP (after Turn-2 refresh) or shell, stop with `status: blocked` and report the exact error.
   - NEVER run `git commit`, `git checkout`, `git switch`, `git reset`, or `git push`.
 - **Subagents:** Never invoke other subagents.
 

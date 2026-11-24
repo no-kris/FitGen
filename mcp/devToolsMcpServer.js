@@ -43,6 +43,12 @@ export const TOOL_DEFINITIONS = [
     name: "run_tests",
     description:
       "Run the Vitest test suite (`npm test`) in the workspace, optionally scoped to specific relative `*.test.{js,jsx}` files.",
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -60,6 +66,12 @@ export const TOOL_DEFINITIONS = [
     name: "git_hash_object",
     description:
       "Compute `git hash-object` SHA-1 hashes for one or more validated workspace-relative file paths.",
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -78,6 +90,12 @@ export const TOOL_DEFINITIONS = [
     name: "run_lint",
     description:
       "Run read-only ESLint (`npx eslint src api` or `npx eslint scripts`) without `--fix`.",
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -94,6 +112,12 @@ export const TOOL_DEFINITIONS = [
   {
     name: "run_build",
     description: "Run the production Vite build (`npm run build`) in the workspace.",
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: "object",
       properties: {},
@@ -104,6 +128,12 @@ export const TOOL_DEFINITIONS = [
     name: "git_status_diff",
     description:
       "Run read-only git inspection (`status`, `diff_stat`, `diff`, or `rev_parse`) in the workspace.",
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     inputSchema: {
       type: "object",
       properties: {
