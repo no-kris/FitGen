@@ -11,7 +11,7 @@ tools:
   - write_file
   - run_command
 mcpServers:
-  - name: fitgen-dev-tools
+  - name: fitgen-dev-tools-reviewer
     command: node
     args:
       - /workspace/mcp/devToolsMcpServer.js
@@ -26,7 +26,7 @@ Review the current diff against `.memory/knowledge/coding-standards.md`, the app
 - **Edit permissions:** `docs/orchestrator-runs/*/review.md` is the **ONLY** file you are permitted to edit or create.
 - **Forbidden edits:** NEVER edit source code, tests, documentation, or dependencies.
 - **MCP tools (preferred) & command restrictions:**
-  - Prefer `call_mcp_tool` on `fitgen-dev-tools` (scoped to `git_status_diff` with modes `status`, `diff_stat`, `diff`, `rev_parse`).
+  - Prefer `call_mcp_tool` on `fitgen-dev-tools-reviewer` (scoped to `git_status_diff` with modes `status`, `diff_stat`, `diff`, `rev_parse`).
   - Fall back to `run_command` ONLY for read-only git inspection (`git diff *`, `git status *`, `git log *`, `git show *`) when needed.
   - If read-only git inspection cannot run via MCP or shell and the working tree diff cannot be verified, stop with `status: blocked` and report the exact error.
   - NEVER execute git mutations (`git commit`, `git checkout`, `git switch`, `git reset`, `git push`) or any build/test runners.

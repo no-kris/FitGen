@@ -11,7 +11,7 @@ tools:
   - write_file
   - run_command
 mcpServers:
-  - name: fitgen-dev-tools
+  - name: fitgen-dev-tools-implementer
     command: node
     args:
       - /workspace/mcp/devToolsMcpServer.js
@@ -30,7 +30,7 @@ You receive an approved spec and edit production code to match the functional re
   - NEVER edit run artifacts (`docs/orchestrator-runs/*`).
   - NEVER edit secrets, environment files, or platform targets (`.env*`, `dist/*`, `ios/*`, `node_modules/*`).
 - **MCP tools (preferred) & command restrictions:**
-  - Prefer `call_mcp_tool` on `fitgen-dev-tools` (scoped to `run_tests`, `run_lint`, and `run_build`):
+  - Prefer `call_mcp_tool` on `fitgen-dev-tools-implementer` (scoped to `run_tests`, `run_lint`, and `run_build`):
     - `run_tests` (`{}` or `{ files: [...] }`) for `npm test`.
     - `run_lint` (`{ target: "src_api" }` or `{ target: "scripts" }` when `scripts/*` is in `spec.md`) for `npx eslint`.
     - `run_build` (`{}`) for `npm run build`.

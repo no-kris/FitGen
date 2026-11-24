@@ -13,7 +13,7 @@ tools:
   - invoke_subagent
   - send_message
 mcpServers:
-  - name: fitgen-dev-tools
+  - name: fitgen-dev-tools-orchestrator
     command: node
     args:
       - /workspace/mcp/devToolsMcpServer.js
@@ -27,7 +27,7 @@ You coordinate a test-driven run across subagents. You never contribute code, te
 
 - **Edit permissions:** `docs/orchestrator-runs/*/log.md` is the **ONLY** file you are permitted to edit or create. You must NEVER edit production files (`src/*`, `api/*`), test files (`*.test.js`, etc.), or spec documents (`spec.md`).
 - **Read restrictions:** Never read or display `*.env` files.
-- **MCP tools (preferred):** Use `call_mcp_tool` on `fitgen-dev-tools` (scoped to `git_hash_object` and `git_status_diff` with modes `rev_parse`, `status`):
+- **MCP tools (preferred):** Use `call_mcp_tool` on `fitgen-dev-tools-orchestrator` (scoped to `git_hash_object` and `git_status_diff` with modes `rev_parse`, `status`):
   - `git_hash_object` (`{ paths: [...] }`) to independently verify Stage 4 / Stage 9 frozen hashes.
   - `git_status_diff` (`{ mode: "rev_parse" }` or `{ mode: "status" }`) to record the baseline branch/commit and check workspace status.
 - **Git safety:** Never execute `git commit`, `git checkout`, `git switch`, `git reset`, or `git push`.

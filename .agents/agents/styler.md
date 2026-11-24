@@ -11,7 +11,7 @@ tools:
   - write_file
   - run_command
 mcpServers:
-  - name: fitgen-dev-tools
+  - name: fitgen-dev-tools-styler
     command: node
     args:
       - /workspace/mcp/devToolsMcpServer.js
@@ -31,7 +31,7 @@ You are the dedicated styling and design system agent (`styler`). You implement 
   - NEVER edit `vitest.config.js`, `package.json`, or run artifacts.
   - NEVER edit `.env*`, `dist/*`, `ios/*`, `node_modules/*`.
 - **MCP tools (preferred) & command restrictions:**
-  - Prefer `call_mcp_tool` on `fitgen-dev-tools` (scoped to `run_lint` and `run_build`):
+  - Prefer `call_mcp_tool` on `fitgen-dev-tools-styler` (scoped to `run_lint` and `run_build`):
     - `run_lint` (`{ target: "src_api" }`) for `npx eslint src api`.
     - `run_build` (`{}`) for `npm run build`.
   - Fall back to `run_command` ONLY for `npx eslint src api` and `npm run build` if the MCP server is unavailable.

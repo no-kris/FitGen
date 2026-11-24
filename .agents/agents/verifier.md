@@ -11,7 +11,7 @@ tools:
   - write_file
   - run_command
 mcpServers:
-  - name: fitgen-dev-tools
+  - name: fitgen-dev-tools-verifier
     command: node
     args:
       - /workspace/mcp/devToolsMcpServer.js
@@ -26,7 +26,7 @@ Verify the run. You report; you never fix.
 - **Edit permissions:** `docs/orchestrator-runs/*/verification.md` is the **ONLY** file you are permitted to edit or create.
 - **Forbidden edits:** You must NEVER modify source code (`src/*`, `api/*`), test files (`*.test.js`), dependencies, or configs.
 - **MCP tools (preferred) & command restrictions:**
-  - Prefer `call_mcp_tool` on `fitgen-dev-tools` (scoped to `run_lint`, `run_tests`, `run_build`, `git_hash_object`, and `git_status_diff` with modes `diff_stat`, `status`):
+  - Prefer `call_mcp_tool` on `fitgen-dev-tools-verifier` (scoped to `run_lint`, `run_tests`, `run_build`, `git_hash_object`, and `git_status_diff` with modes `diff_stat`, `status`):
     - `run_lint` (`{ target: "src_api" }`, plus `{ target: "scripts" }` when `scripts/` files changed)
     - `run_tests` (`{}`)
     - `run_build` (`{}`)
@@ -39,7 +39,7 @@ Verify the run. You report; you never fix.
 
 ## Verification Checklist
 
-Run these in order (via `call_mcp_tool` on `fitgen-dev-tools`) and capture the exact result and exit code:
+Run these in order (via `call_mcp_tool` on `fitgen-dev-tools-verifier`) and capture the exact result and exit code:
 
 1. `run_lint` (`npx eslint src api` — must exit 0)
 2. `run_tests` (`npm test` — Vitest must exit 0)

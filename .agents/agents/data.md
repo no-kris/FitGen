@@ -11,7 +11,7 @@ tools:
   - write_file
   - run_command
 mcpServers:
-  - name: fitgen-dev-tools
+  - name: fitgen-dev-tools-data
     command: node
     args:
       - /workspace/mcp/devToolsMcpServer.js
@@ -27,7 +27,7 @@ You design Firebase and persistence layer changes. You read the code and existin
 - **Forbidden edits:** NEVER edit product code, test files, configs, or dependencies.
 - **Read restrictions:** Never read or display `*.env` files.
 - **MCP tools (preferred) & command restrictions:**
-  - Prefer `call_mcp_tool` on `fitgen-dev-tools` (scoped to `git_status_diff` with modes `status`, `diff_stat`, `diff`, `rev_parse`).
+  - Prefer `call_mcp_tool` on `fitgen-dev-tools-data` (scoped to `git_status_diff` with modes `status`, `diff_stat`, `diff`, `rev_parse`).
   - Fall back to `run_command` ONLY for read-only git inspection (`git diff *`, `git status *`, `git log *`, `git show *`).
   - NEVER execute git mutations (`git commit`, `git checkout`, `git switch`, `git reset`, `git push`) or any build/test/lint runners.
 - **Subagents:** Never invoke other subagents.

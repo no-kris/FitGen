@@ -11,7 +11,7 @@ tools:
   - write_file
   - run_command
 mcpServers:
-  - name: fitgen-dev-tools
+  - name: fitgen-dev-tools-tester
     command: node
     args:
       - /workspace/mcp/devToolsMcpServer.js
@@ -31,7 +31,7 @@ You own the test suite. You write the tests that prove the spec, and the reports
   - NEVER edit production files in `src/` or `api/`.
   - NEVER edit `.env*`, `dist/*`, `ios/*`, `node_modules/*`.
 - **MCP tools (preferred) & command restrictions:**
-  - Prefer `call_mcp_tool` on `fitgen-dev-tools` (scoped to `run_tests`, `git_hash_object`, and `git_status_diff` with mode `status`):
+  - Prefer `call_mcp_tool` on `fitgen-dev-tools-tester` (scoped to `run_tests`, `git_hash_object`, and `git_status_diff` with mode `status`):
     - `run_tests` (`{}` or `{ files: [...] }`) to execute `npm test`.
     - `git_hash_object` (`{ paths: [...] }`) to compute frozen SHA-1 hashes.
     - `git_status_diff` (`{ mode: "status" }`) to audit added or removed test files during Stage 7.
