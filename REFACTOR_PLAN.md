@@ -7,11 +7,11 @@ This plan is split into seven phases. Each phase can ship on its own and leaves 
 | 0 | Reproduce and get set up | Partial (`refactor/phase-1` branch created; `firestore.rules` not yet in repo) | Fixing the wrong cause |
 | 1 | Make workout saves reliable | **Done** (`de9720a`) | Users keep losing workouts |
 | 2 | Remove guest mode | **Code done** (manual Firebase Console & cleanup runbook pending) | Guest data keeps piling up in the cloud; the AI endpoint can be abused |
-| 3 | Fix smaller bugs | Partial (5 of 12 items landed: 2 in Phase 1, 3 in Group 1) | Wrong plans, broken timers, unsafe account deletion |
+| 3 | Fix smaller bugs | Partial (8 of 12 items landed: 2 in Phase 1, 3 in Group 1, 3 in Group 2) | Wrong plans, broken timers, unsafe account deletion |
 | 4 | One data layer | Pending (`activeWorkoutStore` landed in Phase 1) | New features bring back the save bugs |
 | 5 | Move AI work to the server | Pending | Prompt abuse, malformed plans |
-| 6 | Clean up the app shell | Pending (`Button` `...rest` landed in Phase 1) | Slow re-renders, scattered logic |
-| 7 | Tests and tooling | In progress (Vitest + RTL + 21 suites / 280 tests across Phases 1–3 Group 1) | Things break again without anyone noticing |
+| 6 | Clean up the app shell | Pending (`Button` `...rest` in Phase 1; `TextInput` `...rest` in Phase 3 Group 2) | Slow re-renders, scattered logic |
+| 7 | Tests and tooling | In progress (Vitest + RTL + 22 suites / 323 tests across Phases 1–3 Group 2) | Things break again without anyone noticing |
 
 ---
 
@@ -66,7 +66,7 @@ This plan is split into seven phases. Each phase can ship on its own and leaves 
 **Verification & follow-ups:**
 - Automated: `npm test` (10 files / 72 tests passing), `npx eslint src api` (0 errors, 0 warnings), `npm run build` (pass).
 - Manual: Verified live sync against updated Firestore security rules (`users/{userId}/workouts/{workoutId}`). Still recommended to spot-check airplane-mode offline finish + reconnect on device.
-- Follow-up noted: When `useCloudSync` fails (`syncError !== null`), the sync guard currently surfaces `"Still syncing your data from the cloud"` instead of displaying `syncError` with a Retry Sync button; address alongside Phase 3/4 or as a quick follow-up.
+- Follow-up noted: When `useCloudSync` fails (`syncError !== null`), the sync guard previously surfaced `"Still syncing your data from the cloud"` instead of displaying `syncError` with a Retry Sync button — **resolved in Phase 3 Group 2** (`useCloudSync.retrySync`, `App.jsx` guards, and `ProfileScreen.jsx` `Retry Sync` banner).
 
 **Done when:**
 - Finishing a workout in airplane mode, then reconnecting, saves it once.
@@ -120,14 +120,16 @@ This plan is split into seven phases. Each phase can ship on its own and leaves 
 - [x] **Errors from next-week generation are swallowed:** `handleGenerateNextWeek` catches its own errors. Pass them on so `PlanDashboard` can show them. *(Done in Phase 1.)*
 - [ ] **Week tab jumps:** `PlanDashboard`'s `useEffect([plan])` moves to the last week whenever the plan changes. Only do this when `plan.weeks.length` grows. *(Group 3)*
 - [ ] **Props edited in place:** Remove `details.exercises[index].name = alt` from `DayDetailModal`. *(Group 3)*
-- [ ] **Account deletion order:** Re-authenticate first (`authService.reauthenticate` exists but isn't used), then delete the Firestore data, then the Auth user. Never leave an account with its data already deleted. *(Group 2)*
-- [ ] **Reset Program wipes history:** Reset should clear only `plan` and `profile`. History is separate now, after Phase 1. *(Group 2)*
-- [ ] **Logout leaves data behind:** Clear `fitgen-active*` keys on logout. *(Group 2)*
+- [x] **Account deletion order:** Re-authenticate first (`authService.reauthenticate` exists but isn't used), then delete the Firestore data, then the Auth user. Never leave an account with its data already deleted. *(Done in Phase 3 Group 2: added `DeleteAccountModal.jsx`, chunked `firestoreService.deleteUserData`, and strict `reauthenticate -> deleteUserData -> deleteAccount -> cleanup` in `useAuth.handleDeleteAccount`.)*
+- [x] **Reset Program wipes history:** Reset should clear only `plan` and `profile`. History is separate now, after Phase 1. *(Done in Phase 3 Group 2: added `firestoreService.resetUserProgram`, null-safe `useCloudSync` hydration + `retrySync`, and updated `App.handleResetSystem` + `ProfileScreen.jsx` to clear only `plan`/`profile` and paused workout while preserving `history`.)*
+- [x] **Logout leaves data behind:** Clear `fitgen-active*` keys on logout. *(Done in Phase 3 Group 2: `activeWorkoutStore.clear()` sweeps all `fitgen-active*`/`fitgen:active*` keys; wired across `useAuth.handleLogout`, `App.clearStorage`, and `App.handleLogoutEvent`.)*
 - [ ] **Exclusions/priorities type:** Default them to `""` instead of `[]`, and treat empty as "None" in both the prompt and `ProfileScreen`. *(Group 4)*
 - [ ] **Setup errors:** `errors ? ...` is always truthy, and errors never clear after a step passes. Reset them when moving to the next step. *(Group 4)*
 - [x] **Exercise swap crashes when there are no alternatives:** Guard `exercise.alternatives` in `handleReplaceExercise`. *(Done in Phase 1.)*
 
 **Group 1 verification:** `npm test` (21/21 files, 280/280 tests), `npx eslint src api` (exit 0), `npm run build` (exit 0), `grep -rn sessionDuration src` (0 matches). Run artifacts in `docs/orchestrator-runs/phase-3-group-1-workout-parsing-and-duration-2026-11-23/`.
+
+**Group 2 verification:** `npm test` (22/22 files, 323/323 tests), `npx eslint src api` (exit 0), `npm run build` (exit 0), 8/8 frozen suites `HOLD`. Run artifacts in `docs/orchestrator-runs/phase-3-group-2-account-lifecycle-and-hygiene-2026-11-24/`.
 
 **Done when:** Each item has been checked by hand (or covered by a unit test in Phase 7).
 
@@ -180,8 +182,8 @@ This plan is split into seven phases. Each phase can ship on its own and leaves 
 - [ ] Move `utils/handleModeChange.jsx` into `features/auth/` (it's a component).
 - [ ] Turn `renderStep.jsx` into a config array of `{ title, component, validate }` and merge in `handleNextStep.js`.
 - [ ] Replace `alert()` with a `Toast` component.
-- [ ] `Button`: pass the remaining props (`...rest`) through. `TextInput` already receives `inputMode`, which is currently dropped. *(`Button` `...rest` forwarding done in Phase 1; `TextInput` `inputMode` remains.)*
-- [ ] Remove unused imports (`Settings` in ProfileScreen, `Weight` in ActiveWorkout, etc.). Fix the lint warnings.
+- [x] `Button` and `TextInput` prop forwarding: pass remaining props (`...rest`) through. *(`Button` `...rest` done in Phase 1; `TextInput` `...rest` done in Phase 3 Group 2.)*
+- [ ] Remove unused imports (`Settings` in ProfileScreen, `Weight` in ActiveWorkout, etc.). Fix the lint warnings. *(Also consider extracting the Reset Program modal from `ProfileScreen.jsx` during Phase 6 cleanup.)*
 
 **Done when:** `npm run lint` passes with no warnings.
 
@@ -191,7 +193,7 @@ This plan is split into seven phases. Each phase can ship on its own and leaves 
 
 **Goal:** Keep the fixes from breaking again.
 
-- [x] Add Vitest and React Testing Library. *(Added with 21 test suites / 280 passing tests across Phases 1–3 Group 1, plus `scripts/**/*.test.js` in `vitest.config.js`.)*
+- [x] Add Vitest and React Testing Library. *(Added with 22 test suites / 323 passing tests across Phases 1–3 Group 2, plus `scripts/**/*.test.js` in `vitest.config.js`.)*
 - [ ] Write unit tests for `parseRestSeconds`, `extractJsonFromText`, `validatePlan`, `stripUndefined`, and the active-workout store's key logic. *(`stripUndefined`, `activeWorkoutStore`, and `parseRestSeconds` tests done; `extractJsonFromText` and `validatePlan` remain.)*
 - [ ] Add Firestore rules tests with `@firebase/rules-unit-testing` and the emulator: the owner can read and write, other users and anonymous users can't.
 - [ ] Add a GitHub Action that runs lint, tests and build on each PR.

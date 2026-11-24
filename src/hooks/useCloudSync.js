@@ -1,15 +1,24 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { firestoreService } from "../services/firebase/firestoreServices";
 
 export function useCloudSync(user, userData, setUserData, onSyncComplete) {
+  const [syncAttempt, setSyncAttempt] = useState(0);
   const [syncState, setSyncState] = useState({
     user: null,
+    attempt: 0,
     isSynced: false,
     syncError: null,
   });
   const localDataRef = useRef(userData);
   const setUserDataRef = useRef(setUserData);
   const onSyncCompleteRef = useRef(onSyncComplete);
+
+  const retrySync = useCallback(() => {
+    if (!user) {
+      return;
+    }
+    setSyncAttempt((prev) => prev + 1);
+  }, [user]);
 
   // Keep a ref to the latest callbacks/local data
   useEffect(() => {
@@ -47,9 +56,9 @@ export function useCloudSync(user, userData, setUserData, onSyncComplete) {
         }
 
         if (cloudData || cloudWorkouts.length > 0) {
-          setUserDataRef.current((prev) => ({
-            profile: cloudData?.profile ?? prev.profile,
-            plan: cloudData?.plan ?? prev.plan,
+          setUserDataRef.current(() => ({
+            profile: cloudData?.profile ?? null,
+            plan: cloudData?.plan ?? null,
             history: cloudWorkouts,
           }));
           finalHasPlan = Boolean(cloudData?.plan);
@@ -65,12 +74,22 @@ export function useCloudSync(user, userData, setUserData, onSyncComplete) {
         }
 
         if (isMounted) {
-          setSyncState({ user, isSynced: true, syncError: null });
+          setSyncState({
+            user,
+            attempt: syncAttempt,
+            isSynced: true,
+            syncError: null,
+          });
         }
       } catch (err) {
         console.error("Sync Error:", err);
         if (isMounted) {
-          setSyncState({ user, isSynced: false, syncError: err });
+          setSyncState({
+            user,
+            attempt: syncAttempt,
+            isSynced: false,
+            syncError: err,
+          });
         }
       } finally {
         if (isMounted && onSyncCompleteRef.current) {
@@ -84,12 +103,15 @@ export function useCloudSync(user, userData, setUserData, onSyncComplete) {
     return () => {
       isMounted = false;
     };
-  }, [user]);
+  }, [user, syncAttempt]);
 
-  const isCurrentUser = Boolean(user && syncState.user === user);
+  const isCurrentSync = Boolean(
+    user && syncState.user === user && syncState.attempt === syncAttempt
+  );
 
   return {
-    isSynced: isCurrentUser ? syncState.isSynced : false,
-    syncError: isCurrentUser ? syncState.syncError : null,
+    isSynced: isCurrentSync ? syncState.isSynced : false,
+    syncError: isCurrentSync ? syncState.syncError : null,
+    retrySync,
   };
 }

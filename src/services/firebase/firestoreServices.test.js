@@ -68,7 +68,10 @@ function createBatchRecorder() {
     const batch = {
       ops,
       set: vi.fn((ref, data, options) => {
-        ops.push({ ref, data, options });
+        ops.push({ type: "set", ref, data, options });
+      }),
+      delete: vi.fn((ref) => {
+        ops.push({ type: "delete", ref });
       }),
       commit: vi.fn(async () => undefined),
     };
@@ -694,6 +697,281 @@ describe("firestoreServices", () => {
           },
         ])
       ).rejects.toThrow("batch-failed");
+    });
+  });
+
+  describe("firestoreService exported API surface", () => {
+    it("removes clearUserData and exports resetUserProgram and deleteUserData", () => {
+      expect(firestoreModule.firestoreService.clearUserData).toBeUndefined();
+      expect(firestoreModule.firestoreService.resetUserProgram).toBeTypeOf(
+        "function"
+      );
+      expect(firestoreModule.firestoreService.deleteUserData).toBeTypeOf(
+        "function"
+      );
+      expect(Object.keys(firestoreModule.firestoreService).sort()).toEqual([
+        "addWorkout",
+        "deleteUserData",
+        "getUserData",
+        "getWorkouts",
+        "migrateLegacyHistory",
+        "resetUserProgram",
+        "saveUserData",
+      ]);
+    });
+  });
+
+  describe("firestoreService.resetUserProgram", () => {
+    it("throws when userId is falsy without making Firestore calls", async () => {
+      expect(firestoreModule.firestoreService.resetUserProgram).toBeTypeOf(
+        "function"
+      );
+
+      await expect(
+        firestoreModule.firestoreService.resetUserProgram("")
+      ).rejects.toThrow("User ID is required to reset program.");
+      await expect(
+        firestoreModule.firestoreService.resetUserProgram(null)
+      ).rejects.toThrow("User ID is required to reset program.");
+
+      expect(firestoreMocks.setDoc).not.toHaveBeenCalled();
+      expect(firestoreMocks.getDocs).not.toHaveBeenCalled();
+      expect(firestoreMocks.writeBatch).not.toHaveBeenCalled();
+      expect(firestoreMocks.deleteDoc).not.toHaveBeenCalled();
+    });
+
+    it("merges { plan: null, profile: null, updatedAt } on users/{uid} without touching workouts subcollection", async () => {
+      expect(firestoreModule.firestoreService.resetUserProgram).toBeTypeOf(
+        "function"
+      );
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-11-24T01:00:00.000Z"));
+      firestoreMocks.setDoc.mockResolvedValueOnce(undefined);
+
+      await firestoreModule.firestoreService.resetUserProgram("user-reset-1");
+
+      expect(firestoreMocks.setDoc).toHaveBeenCalledTimes(1);
+      const [ref, payload, options] = firestoreMocks.setDoc.mock.calls[0];
+      expect(ref.path).toBe("users/user-reset-1");
+      expect(payload).toEqual({
+        plan: null,
+        profile: null,
+        updatedAt: "2026-11-24T01:00:00.000Z",
+      });
+      expect(options).toEqual({ merge: true });
+      expect(firestoreMocks.collection).not.toHaveBeenCalled();
+      expect(firestoreMocks.getDocs).not.toHaveBeenCalled();
+      expect(firestoreMocks.writeBatch).not.toHaveBeenCalled();
+      expect(firestoreMocks.deleteDoc).not.toHaveBeenCalled();
+    });
+
+    it("logs and rethrows Firestore errors from setDoc", async () => {
+      expect(firestoreModule.firestoreService.resetUserProgram).toBeTypeOf(
+        "function"
+      );
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      const writeError = new Error("reset-permission-denied");
+      firestoreMocks.setDoc.mockRejectedValueOnce(writeError);
+
+      try {
+        await expect(
+          firestoreModule.firestoreService.resetUserProgram("user-reset-err")
+        ).rejects.toThrow("reset-permission-denied");
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          "Error resetting user program:",
+          writeError
+        );
+      } finally {
+        consoleErrorSpy.mockRestore();
+      }
+    });
+  });
+
+  describe("firestoreService.deleteUserData", () => {
+    it("throws when userId is falsy without making Firestore calls", async () => {
+      expect(firestoreModule.firestoreService.deleteUserData).toBeTypeOf(
+        "function"
+      );
+
+      await expect(
+        firestoreModule.firestoreService.deleteUserData("")
+      ).rejects.toThrow("User ID is required to delete user data.");
+      await expect(
+        firestoreModule.firestoreService.deleteUserData(null)
+      ).rejects.toThrow("User ID is required to delete user data.");
+
+      expect(firestoreMocks.getDocs).not.toHaveBeenCalled();
+      expect(firestoreMocks.writeBatch).not.toHaveBeenCalled();
+    });
+
+    it("deletes users/{uid} in 1 batch when the user has 0 workouts and returns { deletedWorkoutsCount: 0 }", async () => {
+      expect(firestoreModule.firestoreService.deleteUserData).toBeTypeOf(
+        "function"
+      );
+      firestoreMocks.getDocs.mockResolvedValueOnce({ docs: [] });
+      const batches = createBatchRecorder();
+
+      const result =
+        await firestoreModule.firestoreService.deleteUserData("user-zero");
+
+      expect(firestoreMocks.collection).toHaveBeenCalledWith(
+        expect.anything(),
+        "users",
+        "user-zero",
+        "workouts"
+      );
+      expect(firestoreMocks.orderBy).not.toHaveBeenCalled();
+      expect(firestoreMocks.getDocs).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({ deletedWorkoutsCount: 0 });
+      expect(batches).toHaveLength(1);
+      expect(batches[0].ops).toHaveLength(1);
+      expect(batches[0].ops[0]).toEqual({
+        type: "delete",
+        ref: expect.objectContaining({ path: "users/user-zero" }),
+      });
+      expect(batches[0].commit).toHaveBeenCalledTimes(1);
+    });
+
+    it("deletes all workouts before users/{uid} in 1 batch for small workout counts", async () => {
+      expect(firestoreModule.firestoreService.deleteUserData).toBeTypeOf(
+        "function"
+      );
+      firestoreMocks.getDocs.mockResolvedValueOnce({
+        docs: [{ id: "w-1" }, { id: "w-2" }, { id: "w-3" }],
+      });
+      const batches = createBatchRecorder();
+
+      const result =
+        await firestoreModule.firestoreService.deleteUserData("user-small");
+
+      expect(result).toEqual({ deletedWorkoutsCount: 3 });
+      expect(batches).toHaveLength(1);
+      expect(batches[0].ops.map((op) => op.ref.path)).toEqual([
+        "users/user-small/workouts/w-1",
+        "users/user-small/workouts/w-2",
+        "users/user-small/workouts/w-3",
+        "users/user-small",
+      ]);
+      expect(batches[0].commit).toHaveBeenCalledTimes(1);
+    });
+
+    it("chunks exact 450 workouts across 2 batches with users/{uid} alone in batch 2", async () => {
+      expect(firestoreModule.firestoreService.deleteUserData).toBeTypeOf(
+        "function"
+      );
+      const docs = Array.from({ length: 450 }, (_, i) => ({
+        id: `w-${i + 1}`,
+      }));
+      firestoreMocks.getDocs.mockResolvedValueOnce({ docs });
+      const batches = createBatchRecorder();
+
+      const result =
+        await firestoreModule.firestoreService.deleteUserData("user-450");
+
+      expect(result).toEqual({ deletedWorkoutsCount: 450 });
+      expect(batches).toHaveLength(2);
+      expect(batches[0].ops).toHaveLength(450);
+      expect(
+        batches[0].ops.every((op) =>
+          op.ref.path.startsWith("users/user-450/workouts/")
+        )
+      ).toBe(true);
+      expect(batches[0].commit).toHaveBeenCalledTimes(1);
+
+      expect(batches[1].ops).toHaveLength(1);
+      expect(batches[1].ops[0].ref.path).toBe("users/user-450");
+      expect(batches[1].commit).toHaveBeenCalledTimes(1);
+    });
+
+    it("chunks 455 workouts across 2 batches (450 in batch 1, 5 workouts + users/{uid} in batch 2)", async () => {
+      expect(firestoreModule.firestoreService.deleteUserData).toBeTypeOf(
+        "function"
+      );
+      const docs = Array.from({ length: 455 }, (_, i) => ({
+        id: `w-${i + 1}`,
+      }));
+      firestoreMocks.getDocs.mockResolvedValueOnce({ docs });
+      const commitOrder = [];
+      const batches = [];
+      firestoreMocks.writeBatch.mockImplementation(() => {
+        const batchIndex = batches.length;
+        const ops = [];
+        const batch = {
+          ops,
+          delete: vi.fn((ref) => {
+            ops.push({ type: "delete", ref });
+          }),
+          commit: vi.fn(async () => {
+            commitOrder.push(batchIndex);
+          }),
+        };
+        batches.push(batch);
+        return batch;
+      });
+
+      const result =
+        await firestoreModule.firestoreService.deleteUserData("user-455");
+
+      expect(result).toEqual({ deletedWorkoutsCount: 455 });
+      expect(batches).toHaveLength(2);
+      expect(commitOrder).toEqual([0, 1]);
+      expect(batches[0].ops).toHaveLength(450);
+      expect(
+        batches[0].ops.some((op) => op.ref.path === "users/user-455")
+      ).toBe(false);
+
+      expect(batches[1].ops).toHaveLength(6);
+      expect(
+        batches[1].ops
+          .slice(0, 5)
+          .every((op) => op.ref.path.startsWith("users/user-455/workouts/"))
+      ).toBe(true);
+      expect(batches[1].ops[5].ref.path).toBe("users/user-455");
+    });
+
+    it("logs and rethrows errors from getDocs and batch.commit", async () => {
+      expect(firestoreModule.firestoreService.deleteUserData).toBeTypeOf(
+        "function"
+      );
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+
+      try {
+        const readError = new Error("workouts-read-failed");
+        firestoreMocks.getDocs.mockRejectedValueOnce(readError);
+
+        await expect(
+          firestoreModule.firestoreService.deleteUserData("user-read-err")
+        ).rejects.toThrow("workouts-read-failed");
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          "Error deleting user data:",
+          readError
+        );
+
+        const batchError = new Error("delete-batch-failed");
+        firestoreMocks.getDocs.mockResolvedValueOnce({
+          docs: [{ id: "w-1" }],
+        });
+        firestoreMocks.writeBatch.mockImplementationOnce(() => ({
+          delete: vi.fn(),
+          commit: vi.fn(async () => {
+            throw batchError;
+          }),
+        }));
+
+        await expect(
+          firestoreModule.firestoreService.deleteUserData("user-batch-err")
+        ).rejects.toThrow("delete-batch-failed");
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          "Error deleting user data:",
+          batchError
+        );
+      } finally {
+        consoleErrorSpy.mockRestore();
+      }
     });
   });
 });

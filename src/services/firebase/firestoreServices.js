@@ -2,7 +2,6 @@ import {
   doc,
   setDoc,
   getDoc,
-  deleteDoc,
   collection,
   addDoc,
   getDocs,
@@ -18,7 +17,7 @@ export const COLLECTIONS = {
   WORKOUTS: "workouts",
 };
 
-const MIGRATION_BATCH_LIMIT = 450;
+const BATCH_LIMIT = 450;
 
 export function stripUndefined(value) {
   if (Array.isArray(value)) {
@@ -221,8 +220,8 @@ export const firestoreService = {
       }
 
       const chunks = [];
-      for (let i = 0; i < validEntries.length; i += MIGRATION_BATCH_LIMIT) {
-        chunks.push(validEntries.slice(i, i + MIGRATION_BATCH_LIMIT));
+      for (let i = 0; i < validEntries.length; i += BATCH_LIMIT) {
+        chunks.push(validEntries.slice(i, i + BATCH_LIMIT));
       }
 
       for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx += 1) {
@@ -260,12 +259,57 @@ export const firestoreService = {
     }
   },
 
-  clearUserData: async (userId) => {
+  resetUserProgram: async (userId) => {
+    if (!userId) {
+      throw new Error("User ID is required to reset program.");
+    }
     try {
       const userRef = doc(db, COLLECTIONS.USERS, userId);
-      await deleteDoc(userRef);
+      await setDoc(
+        userRef,
+        {
+          plan: null,
+          profile: null,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
     } catch (error) {
-      console.error("Error clearing user data:", error);
+      console.error("Error resetting user program:", error);
+      throw error;
+    }
+  },
+
+  deleteUserData: async (userId) => {
+    if (!userId) {
+      throw new Error("User ID is required to delete user data.");
+    }
+    try {
+      const workoutsRef = collection(
+        db,
+        COLLECTIONS.USERS,
+        userId,
+        COLLECTIONS.WORKOUTS
+      );
+      const snapshot = await getDocs(workoutsRef);
+      const workoutRefs = snapshot.docs.map((d) =>
+        doc(db, COLLECTIONS.USERS, userId, COLLECTIONS.WORKOUTS, d.id)
+      );
+      const userRef = doc(db, COLLECTIONS.USERS, userId);
+      const refsToDelete = [...workoutRefs, userRef];
+
+      for (let i = 0; i < refsToDelete.length; i += BATCH_LIMIT) {
+        const chunk = refsToDelete.slice(i, i + BATCH_LIMIT);
+        const batch = writeBatch(db);
+        for (const ref of chunk) {
+          batch.delete(ref);
+        }
+        await batch.commit();
+      }
+
+      return { deletedWorkoutsCount: workoutRefs.length };
+    } catch (error) {
+      console.error("Error deleting user data:", error);
       throw error;
     }
   },

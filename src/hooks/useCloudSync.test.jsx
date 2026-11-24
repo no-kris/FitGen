@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook, waitFor, cleanup } from "@testing-library/react";
+import { renderHook, waitFor, act, cleanup } from "@testing-library/react";
 
 const firestoreServiceMock = vi.hoisted(() => ({
   getUserData: vi.fn(),
@@ -271,5 +271,179 @@ describe("useCloudSync", () => {
       expect(result.current.isSynced).toBe(false);
     });
     expect(result.current.syncError).toBeNull();
+  });
+
+  it("hydrates null plan and profile while preserving workouts on reload after Reset Program", async () => {
+    const existingWorkouts = [
+      {
+        id: "w-1",
+        weekNumber: 1,
+        dayNumber: 1,
+        dayName: "Monday",
+        focus: "Push",
+        logs: [],
+        duration: 1800,
+        completedAt: "2026-11-20T10:00:00.000Z",
+      },
+      {
+        id: "w-2",
+        weekNumber: 1,
+        dayNumber: 2,
+        dayName: "Wednesday",
+        focus: "Pull",
+        logs: [],
+        duration: 1500,
+        completedAt: "2026-11-22T10:00:00.000Z",
+      },
+    ];
+    firestoreServiceMock.getUserData.mockResolvedValueOnce({
+      plan: null,
+      profile: null,
+      updatedAt: "2026-11-24T00:00:00.000Z",
+    });
+    firestoreServiceMock.getWorkouts.mockResolvedValueOnce(existingWorkouts);
+
+    let state = {
+      profile: { goal: "Stale Local Goal" },
+      plan: { programName: "Stale Local Plan", weeks: [] },
+      history: [],
+    };
+    const setUserData = vi.fn((updater) => {
+      state = typeof updater === "function" ? updater(state) : updater;
+    });
+    const onSyncComplete = vi.fn();
+    const user = { uid: "user-after-reset" };
+
+    const { result } = renderHook(() =>
+      useCloudSync(user, state, setUserData, onSyncComplete)
+    );
+
+    await waitFor(() => {
+      expect(result.current.isSynced).toBe(true);
+    });
+
+    expect(result.current.syncError).toBeNull();
+    expect(state).toEqual({
+      profile: null,
+      plan: null,
+      history: existingWorkouts,
+    });
+    expect(onSyncComplete).toHaveBeenCalledWith(false);
+  });
+
+  it("exposes retrySync that transitions failed -> pending -> synced on recovery", async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const initialError = new Error("Network offline");
+    firestoreServiceMock.getUserData.mockRejectedValueOnce(initialError);
+
+    let state = { profile: null, plan: null, history: [] };
+    const setUserData = vi.fn((updater) => {
+      state = typeof updater === "function" ? updater(state) : updater;
+    });
+    const onSyncComplete = vi.fn();
+    const user = { uid: "user-retry" };
+
+    try {
+      const { result } = renderHook(() =>
+        useCloudSync(user, state, setUserData, onSyncComplete)
+      );
+
+      await waitFor(() => {
+        expect(result.current.syncError).toBe(initialError);
+      });
+      expect(result.current.isSynced).toBe(false);
+      expect(result.current.retrySync).toBeTypeOf("function");
+
+      const retryUserDeferred = createDeferred();
+      const retryWorkoutsDeferred = createDeferred();
+      firestoreServiceMock.getUserData.mockReturnValueOnce(
+        retryUserDeferred.promise
+      );
+      firestoreServiceMock.getWorkouts.mockReturnValueOnce(
+        retryWorkoutsDeferred.promise
+      );
+
+      act(() => {
+        result.current.retrySync();
+      });
+
+      // Immediately transitions back to pending (error cleared while re-fetching)
+      expect(result.current.isSynced).toBe(false);
+      expect(result.current.syncError).toBeNull();
+
+      retryUserDeferred.resolve({
+        plan: { programName: "Recovered Plan", weeks: [] },
+        profile: { goal: "strength" },
+      });
+      retryWorkoutsDeferred.resolve([]);
+
+      await waitFor(() => {
+        expect(result.current.isSynced).toBe(true);
+      });
+
+      expect(result.current.syncError).toBeNull();
+      expect(state).toEqual({
+        profile: { goal: "strength" },
+        plan: { programName: "Recovered Plan", weeks: [] },
+        history: [],
+      });
+      expect(onSyncComplete).toHaveBeenLastCalledWith(true);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it("updates syncError with the new error if retrySync also fails and is a no-op when user is null", async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const err1 = new Error("First sync error");
+    const err2 = new Error("Second sync error");
+    firestoreServiceMock.getUserData
+      .mockRejectedValueOnce(err1)
+      .mockRejectedValueOnce(err2);
+
+    try {
+      const nullHook = renderHook(() =>
+        useCloudSync(
+          null,
+          { profile: null, plan: null, history: [] },
+          vi.fn(),
+          vi.fn()
+        )
+      );
+      expect(nullHook.result.current.retrySync).toBeTypeOf("function");
+      act(() => {
+        nullHook.result.current.retrySync();
+      });
+      expect(firestoreServiceMock.getUserData).not.toHaveBeenCalled();
+
+      const user = { uid: "user-retry-fail" };
+      const { result } = renderHook(() =>
+        useCloudSync(
+          user,
+          { profile: null, plan: null, history: [] },
+          vi.fn(),
+          vi.fn()
+        )
+      );
+
+      await waitFor(() => {
+        expect(result.current.syncError).toBe(err1);
+      });
+
+      act(() => {
+        result.current.retrySync();
+      });
+
+      await waitFor(() => {
+        expect(result.current.syncError).toBe(err2);
+      });
+      expect(result.current.isSynced).toBe(false);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 });

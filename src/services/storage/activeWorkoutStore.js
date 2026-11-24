@@ -3,6 +3,8 @@ export const STORAGE_KEYS = {
   LEGACY_ACTIVE_WORKOUT: "fitgen-active",
 };
 
+const ACTIVE_KEY_PREFIXES = ["fitgen-active", "fitgen:active"];
+
 function normalizePayload(parsed) {
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     return null;
@@ -86,6 +88,19 @@ export const activeWorkoutStore = {
     try {
       localStorage.removeItem(STORAGE_KEYS.ACTIVE_WORKOUT);
       localStorage.removeItem(STORAGE_KEYS.LEGACY_ACTIVE_WORKOUT);
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (
+          typeof key === "string" &&
+          ACTIVE_KEY_PREFIXES.some((prefix) => key.startsWith(prefix))
+        ) {
+          keysToRemove.push(key);
+        }
+      }
+      for (const key of keysToRemove) {
+        localStorage.removeItem(key);
+      }
     } catch (error) {
       console.error("Error clearing active workout:", error);
     }

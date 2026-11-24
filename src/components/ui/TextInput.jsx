@@ -6,6 +6,7 @@ export default function TextInput({
   id,
   className,
   placeholder,
+  ...rest
 }) {
   return (
     <>
@@ -21,6 +22,7 @@ export default function TextInput({
         onChange={onChange}
         className={className}
         placeholder={placeholder}
+        {...rest}
       />
     </>
   );

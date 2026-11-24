@@ -20,6 +20,8 @@ const firestoreServiceMock = vi.hoisted(() => ({
   migrateLegacyHistory: vi.fn(),
   addWorkout: vi.fn(),
   clearUserData: vi.fn(),
+  resetUserProgram: vi.fn(),
+  deleteUserData: vi.fn(),
 }));
 
 const contextStore = vi.hoisted(() => ({
@@ -105,7 +107,7 @@ function createDeferred() {
   return { promise, resolve, reject };
 }
 
-describe("App handleSavePlan and sync guard", () => {
+describe("App handleSavePlan, handleResetSystem, and sync guards", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.resetAllMocks();
@@ -121,7 +123,7 @@ describe("App handleSavePlan and sync guard", () => {
     cleanup();
   });
 
-  it("blocks handleSavePlan while user is signed in and isSynced is false, with zero Firestore writes", async () => {
+  it("blocks handleSavePlan while user is signed in and isSynced is false (pending), with zero Firestore writes", async () => {
     const userDeferred = createDeferred();
     firestoreServiceMock.getUserData.mockReturnValueOnce(userDeferred.promise);
     firestoreServiceMock.getWorkouts.mockResolvedValueOnce([]);
@@ -133,6 +135,7 @@ describe("App handleSavePlan and sync guard", () => {
     });
 
     expect(contextStore.value.isSynced).toBe(false);
+    expect(contextStore.value.syncError).toBeNull();
 
     await expect(
       Promise.resolve().then(() =>
@@ -147,6 +150,77 @@ describe("App handleSavePlan and sync guard", () => {
 
     expect(firestoreServiceMock.saveUserData).not.toHaveBeenCalled();
     expect(contextStore.value.view).toBe("welcome");
+  });
+
+  it("distinguishes syncError from pending in handleSavePlan and handleResetSystem", async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    firestoreServiceMock.getUserData.mockRejectedValueOnce(
+      new Error("Firestore offline")
+    );
+
+    try {
+      render(<App />);
+
+      await act(async () => {
+        authCallbacks.listener({ uid: "user-sync-err", isAnonymous: false });
+      });
+
+      await waitFor(() => {
+        expect(contextStore.value.syncError).toBeInstanceOf(Error);
+      });
+      expect(contextStore.value.isSynced).toBe(false);
+
+      await expect(
+        Promise.resolve().then(() =>
+          contextStore.value.handleSavePlan(
+            { programName: "Plan", weeks: [] },
+            { goal: "strength" }
+          )
+        )
+      ).rejects.toThrow(
+        "Cloud sync failed. Please retry sync before saving your plan."
+      );
+
+      await expect(
+        Promise.resolve().then(() => contextStore.value.handleResetSystem())
+      ).rejects.toThrow(
+        "Cloud sync failed. Please retry sync before resetting your program."
+      );
+
+      expect(firestoreServiceMock.saveUserData).not.toHaveBeenCalled();
+      expect(firestoreServiceMock.resetUserProgram).not.toHaveBeenCalled();
+      expect(firestoreServiceMock.deleteUserData).not.toHaveBeenCalled();
+      expect(firestoreServiceMock.clearUserData).not.toHaveBeenCalled();
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
+  it("blocks handleResetSystem while sync is pending with zero Firestore writes", async () => {
+    const userDeferred = createDeferred();
+    firestoreServiceMock.getUserData.mockReturnValueOnce(userDeferred.promise);
+    firestoreServiceMock.getWorkouts.mockResolvedValueOnce([]);
+
+    render(<App />);
+
+    await act(async () => {
+      authCallbacks.listener({ uid: "user-pending-reset", isAnonymous: false });
+    });
+
+    expect(contextStore.value.isSynced).toBe(false);
+    expect(contextStore.value.syncError).toBeNull();
+
+    await expect(
+      Promise.resolve().then(() => contextStore.value.handleResetSystem())
+    ).rejects.toThrow(
+      "Still syncing your data from the cloud. Please try again in a moment."
+    );
+
+    expect(firestoreServiceMock.resetUserProgram).not.toHaveBeenCalled();
+    expect(firestoreServiceMock.deleteUserData).not.toHaveBeenCalled();
+    expect(firestoreServiceMock.clearUserData).not.toHaveBeenCalled();
   });
 
   it("awaits saveUserData in handleSavePlan once synced and leaves view unchanged on write failure", async () => {
@@ -200,22 +274,147 @@ describe("App handleSavePlan and sync guard", () => {
     expect(contextStore.value.userData.plan.programName).toBe("Plan B");
   });
 
-  it("clearStorage clears both fitgen:active:v1 and legacy fitgen-active keys", async () => {
+  it("handleResetSystem awaits resetUserProgram, clears plan/profile/activeWorkout/active storage, preserves history, and switches view to profile", async () => {
+    const existingHistory = [
+      { id: "w-1", weekNumber: 1, dayNumber: 1, dayName: "Monday", focus: "Push", logs: [], duration: 1800, completedAt: "2026-11-20T10:00:00.000Z" },
+      { id: "w-2", weekNumber: 1, dayNumber: 2, dayName: "Wednesday", focus: "Pull", logs: [], duration: 1500, completedAt: "2026-11-22T10:00:00.000Z" },
+    ];
+    firestoreServiceMock.getUserData.mockResolvedValueOnce({
+      plan: { programName: "PPL", weeks: [] },
+      profile: { goal: "Build Muscle" },
+    });
+    firestoreServiceMock.getWorkouts.mockResolvedValueOnce(existingHistory);
+    firestoreServiceMock.resetUserProgram.mockResolvedValueOnce(undefined);
+
     localStorage.setItem("fitgen:active:v1", JSON.stringify({ weekNumber: 1 }));
-    localStorage.setItem("fitgen-active", JSON.stringify({ old: true }));
+    localStorage.setItem("fitgen-active", JSON.stringify({ legacy: true }));
+    localStorage.setItem("fitgen-active-w1-d1", "{}");
+    localStorage.setItem("theme", "dark");
 
     render(<App />);
+
+    await act(async () => {
+      authCallbacks.listener({ uid: "user-reset-ok", isAnonymous: false });
+    });
+
+    await waitFor(() => {
+      expect(contextStore.value.isSynced).toBe(true);
+      expect(contextStore.value.view).toBe("plan");
+    });
+
+    act(() => {
+      contextStore.value.setActiveWorkout({ dayName: "Monday", weekNumber: 1 });
+    });
+    expect(contextStore.value.activeWorkout).not.toBeNull();
+
+    await act(async () => {
+      await contextStore.value.handleResetSystem();
+    });
+
+    expect(firestoreServiceMock.resetUserProgram).toHaveBeenCalledTimes(1);
+    expect(firestoreServiceMock.resetUserProgram).toHaveBeenCalledWith(
+      "user-reset-ok"
+    );
+    expect(firestoreServiceMock.deleteUserData).not.toHaveBeenCalled();
+    expect(firestoreServiceMock.clearUserData).not.toHaveBeenCalled();
+
+    expect(contextStore.value.userData.plan).toBeNull();
+    expect(contextStore.value.userData.profile).toBeNull();
+    expect(contextStore.value.userData.history).toEqual(existingHistory);
+    expect(contextStore.value.activeWorkout).toBeNull();
+    expect(contextStore.value.view).toBe("profile");
+
+    expect(localStorage.getItem("fitgen:active:v1")).toBeNull();
+    expect(localStorage.getItem("fitgen-active")).toBeNull();
+    expect(localStorage.getItem("fitgen-active-w1-d1")).toBeNull();
+    expect(localStorage.getItem("theme")).toBe("dark");
+  });
+
+  it("handleResetSystem rethrows on resetUserProgram failure and leaves state, activeWorkout, storage, and view unchanged", async () => {
+    const existingHistory = [
+      { id: "w-1", weekNumber: 1, dayNumber: 1, dayName: "Monday", focus: "Push", logs: [], duration: 1200, completedAt: "2026-11-20T10:00:00.000Z" },
+    ];
+    const existingPlan = { programName: "PPL", weeks: [] };
+    const existingProfile = { goal: "Build Muscle" };
+
+    firestoreServiceMock.getUserData.mockResolvedValueOnce({
+      plan: existingPlan,
+      profile: existingProfile,
+    });
+    firestoreServiceMock.getWorkouts.mockResolvedValueOnce(existingHistory);
+    firestoreServiceMock.resetUserProgram.mockRejectedValueOnce(
+      new Error("Reset failed on server")
+    );
+
+    localStorage.setItem("fitgen:active:v1", JSON.stringify({ weekNumber: 1 }));
+
+    render(<App />);
+
+    await act(async () => {
+      authCallbacks.listener({ uid: "user-reset-fail", isAnonymous: false });
+    });
+
+    await waitFor(() => {
+      expect(contextStore.value.isSynced).toBe(true);
+      expect(contextStore.value.view).toBe("plan");
+    });
+
+    const active = { dayName: "Monday", weekNumber: 1 };
+    act(() => {
+      contextStore.value.setActiveWorkout(active);
+    });
+
+    await expect(
+      Promise.resolve().then(() => contextStore.value.handleResetSystem())
+    ).rejects.toThrow("Reset failed on server");
+
+    expect(contextStore.value.userData.plan).toEqual(existingPlan);
+    expect(contextStore.value.userData.profile).toEqual(existingProfile);
+    expect(contextStore.value.userData.history).toEqual(existingHistory);
+    expect(contextStore.value.activeWorkout).toEqual(active);
+    expect(localStorage.getItem("fitgen:active:v1")).not.toBeNull();
+    expect(contextStore.value.view).toBe("plan");
+  });
+
+  it("clearStorage resets userData, activeWorkout, and all fitgen:active* and fitgen-active* storage keys", async () => {
+    localStorage.setItem("fitgen:active:v1", JSON.stringify({ weekNumber: 1 }));
+    localStorage.setItem("fitgen-active", JSON.stringify({ old: true }));
+    localStorage.setItem("fitgen-active-w1-d1", "{}");
+    localStorage.setItem("fitgen:active:v0", "{}");
+    localStorage.setItem("theme", "dark");
+
+    render(<App />);
+
+    act(() => {
+      contextStore.value.setUserData({
+        profile: { goal: "muscle" },
+        plan: { programName: "PPL", weeks: [] },
+        history: [{ id: "w-1" }],
+      });
+      contextStore.value.setActiveWorkout({ weekNumber: 1, dayName: "Monday" });
+    });
+
+    expect(contextStore.value.activeWorkout).not.toBeNull();
 
     act(() => {
       contextStore.value.clearStorage();
     });
 
+    expect(contextStore.value.userData).toEqual({
+      profile: null,
+      plan: null,
+      history: [],
+    });
+    expect(contextStore.value.activeWorkout).toBeNull();
     expect(localStorage.getItem("fitgen:active:v1")).toBeNull();
     expect(localStorage.getItem("fitgen-active")).toBeNull();
+    expect(localStorage.getItem("fitgen-active-w1-d1")).toBeNull();
+    expect(localStorage.getItem("fitgen:active:v0")).toBeNull();
+    expect(localStorage.getItem("theme")).toBe("dark");
   });
 });
 
-describe("App auth context and anonymous sign-out", () => {
+describe("App auth context, logout hygiene, and anonymous sign-out", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.resetAllMocks();
@@ -232,7 +431,7 @@ describe("App auth context and anonymous sign-out", () => {
     cleanup();
   });
 
-  it("exposes the exact 15 AppContext keys", () => {
+  it("exposes the exact 16 AppContext keys including retrySync", () => {
     render(<App />);
 
     expect(Object.keys(contextStore.value).sort()).toEqual([
@@ -241,6 +440,7 @@ describe("App auth context and anonymous sign-out", () => {
       "handleResetSystem",
       "handleSavePlan",
       "isSynced",
+      "retrySync",
       "setActiveWorkout",
       "setShowAuth",
       "setUser",
@@ -254,8 +454,61 @@ describe("App auth context and anonymous sign-out", () => {
     ]);
   });
 
-  it("signs out an anonymous auth event, stays on welcome, and skips Firestore sync", async () => {
+  it("clears userData, activeWorkout, all active workout localStorage keys, and sets view to welcome on null auth transition", async () => {
+    firestoreServiceMock.getUserData.mockResolvedValueOnce({
+      plan: { programName: "PPL", weeks: [] },
+      profile: { goal: "muscle" },
+    });
+    firestoreServiceMock.getWorkouts.mockResolvedValueOnce([{ id: "w-1" }]);
+
+    localStorage.setItem("fitgen:active:v1", JSON.stringify({ weekNumber: 1 }));
+    localStorage.setItem("fitgen-active", JSON.stringify({ legacy: true }));
+    localStorage.setItem("fitgen-active-w2-d3", "{}");
+    localStorage.setItem("theme", "dark");
+
     render(<App />);
+
+    await act(async () => {
+      authCallbacks.listener({ uid: "user-signed-in", isAnonymous: false });
+    });
+
+    await waitFor(() => {
+      expect(contextStore.value.isSynced).toBe(true);
+      expect(contextStore.value.view).toBe("plan");
+    });
+
+    act(() => {
+      contextStore.value.setActiveWorkout({ weekNumber: 1, dayName: "Monday" });
+    });
+
+    await act(async () => {
+      authCallbacks.listener(null);
+    });
+
+    expect(contextStore.value.user).toBeNull();
+    expect(contextStore.value.userData).toEqual({
+      profile: null,
+      plan: null,
+      history: [],
+    });
+    expect(contextStore.value.activeWorkout).toBeNull();
+    expect(contextStore.value.view).toBe("welcome");
+    expect(localStorage.getItem("fitgen:active:v1")).toBeNull();
+    expect(localStorage.getItem("fitgen-active")).toBeNull();
+    expect(localStorage.getItem("fitgen-active-w2-d3")).toBeNull();
+    expect(localStorage.getItem("theme")).toBe("dark");
+  });
+
+  it("signs out an anonymous auth event, clears activeWorkout and active storage, stays on welcome, and skips Firestore sync", async () => {
+    localStorage.setItem("fitgen:active:v1", JSON.stringify({ weekNumber: 1 }));
+    localStorage.setItem("fitgen-active", JSON.stringify({ legacy: true }));
+    localStorage.setItem("fitgen-active-anon", "{}");
+
+    render(<App />);
+
+    act(() => {
+      contextStore.value.setActiveWorkout({ weekNumber: 1, dayName: "Monday" });
+    });
 
     await act(async () => {
       authCallbacks.listener({ uid: "anon-1", isAnonymous: true });
@@ -263,7 +516,11 @@ describe("App auth context and anonymous sign-out", () => {
 
     expect(authMocks.logout).toHaveBeenCalledTimes(1);
     expect(contextStore.value.user).toBeNull();
+    expect(contextStore.value.activeWorkout).toBeNull();
     expect(contextStore.value.view).toBe("welcome");
+    expect(localStorage.getItem("fitgen:active:v1")).toBeNull();
+    expect(localStorage.getItem("fitgen-active")).toBeNull();
+    expect(localStorage.getItem("fitgen-active-anon")).toBeNull();
     expect(firestoreServiceMock.getUserData).not.toHaveBeenCalled();
     expect(firestoreServiceMock.getWorkouts).not.toHaveBeenCalled();
   });

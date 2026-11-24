@@ -46,12 +46,21 @@ export const authService = {
   // Re-authenticate
   reauthenticate: async (password) => {
     const user = auth.currentUser;
+    if (!user || !user.email) {
+      throw new Error("No authenticated email user found.");
+    }
+    if (typeof password !== "string" || password.length === 0) {
+      throw new Error("Password is required for re-authentication.");
+    }
     const credential = EmailAuthProvider.credential(user.email, password);
     await reauthenticateWithCredential(user, credential);
   },
 
   // Delete User information
   deleteAccount: async () => {
+    if (!auth.currentUser) {
+      throw new Error("No authenticated user found.");
+    }
     await deleteUser(auth.currentUser);
   },
 

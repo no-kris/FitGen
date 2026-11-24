@@ -193,6 +193,39 @@ describe("activeWorkoutStore", () => {
     expect(() => activeWorkoutStore.clear()).not.toThrow();
   });
 
+  it("clear removes all fitgen-active* and fitgen:active* keys while leaving unrelated keys intact", async () => {
+    const mod = await loadStoreModule();
+    expect(mod).not.toBeNull();
+    const { activeWorkoutStore, STORAGE_KEYS } = mod;
+
+    expect(Object.keys(STORAGE_KEYS).sort()).toEqual([
+      "ACTIVE_WORKOUT",
+      "LEGACY_ACTIVE_WORKOUT",
+    ]);
+
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_WORKOUT, "{}");
+    localStorage.setItem(STORAGE_KEYS.LEGACY_ACTIVE_WORKOUT, "{}");
+    localStorage.setItem("fitgen-active-w1-d1", "{}");
+    localStorage.setItem("fitgen-active-backup", "{}");
+    localStorage.setItem("fitgen:active:v0", "{}");
+    localStorage.setItem("fitgen:active:v2", "{}");
+    localStorage.setItem("theme", "dark");
+    localStorage.setItem("unrelated-key", "keep-me");
+    localStorage.setItem("fitgen-profile", "keep-me-too");
+
+    activeWorkoutStore.clear();
+
+    expect(localStorage.getItem("fitgen:active:v1")).toBeNull();
+    expect(localStorage.getItem("fitgen-active")).toBeNull();
+    expect(localStorage.getItem("fitgen-active-w1-d1")).toBeNull();
+    expect(localStorage.getItem("fitgen-active-backup")).toBeNull();
+    expect(localStorage.getItem("fitgen:active:v0")).toBeNull();
+    expect(localStorage.getItem("fitgen:active:v2")).toBeNull();
+    expect(localStorage.getItem("theme")).toBe("dark");
+    expect(localStorage.getItem("unrelated-key")).toBe("keep-me");
+    expect(localStorage.getItem("fitgen-profile")).toBe("keep-me-too");
+  });
+
   it("save catches localStorage errors without throwing", async () => {
     const mod = await loadStoreModule();
     expect(mod).not.toBeNull();

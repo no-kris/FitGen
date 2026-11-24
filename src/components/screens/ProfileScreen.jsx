@@ -1,8 +1,16 @@
-import { useState } from "react";
-import { Dumbbell, Settings, LogOut, Scale, Weight } from "lucide-react";
+import { useRef, useState } from "react";
+import {
+  Dumbbell,
+  Settings,
+  LogOut,
+  Loader2,
+  Scale,
+  Weight,
+} from "lucide-react";
 import Button from "../ui/Button";
 import Modal from "../ui/Modal";
 import TextInput from "../ui/TextInput";
+import DeleteAccountModal from "../../features/auth/DeleteAccountModal";
 import { useAuth } from "../../hooks/useAuth";
 import { useAppContext } from "../../context/AppContext";
 
@@ -12,11 +20,23 @@ export default function ProfileScreen() {
     handleResetSystem: onResetSystem,
     user,
     clearStorage,
+    isSynced = true,
+    syncError = null,
+    retrySync,
   } = useAppContext();
   const profile = userData.profile;
   const { handleLogout, handleDeleteAccount } = useAuth({ user, clearStorage });
   const [activeModal, setActiveModal] = useState(null); // 'reset' | 'report' | 'delete-account' | null
   const [reportReason, setReportReason] = useState("");
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetError, setResetError] = useState(null);
+  const isResettingRef = useRef(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState(null);
+  const isLoggingOutRef = useRef(false);
+
+  const isSyncFailed = Boolean(user && !isSynced && syncError);
+  const isSyncPending = Boolean(user && !isSynced && !syncError);
 
   const Icon =
     profile.goal.toLowerCase() === "build muscle"
@@ -34,6 +54,51 @@ export default function ProfileScreen() {
       ? `Priorities: ${profile.priorities}`
       : "No priorities requested",
   ];
+
+  const handleCloseResetModal = () => {
+    if (isResettingRef.current || isResetting) {
+      return;
+    }
+    setResetError(null);
+    setActiveModal(null);
+  };
+
+  const handleConfirmReset = async () => {
+    if (isResettingRef.current) {
+      return;
+    }
+    isResettingRef.current = true;
+    setIsResetting(true);
+    setResetError(null);
+    try {
+      await onResetSystem();
+      setActiveModal(null);
+    } catch (error) {
+      setResetError(
+        error?.message || "Failed to reset program. Please try again."
+      );
+    } finally {
+      isResettingRef.current = false;
+      setIsResetting(false);
+    }
+  };
+
+  const handleLogoutClick = async () => {
+    if (isLoggingOutRef.current) {
+      return;
+    }
+    isLoggingOutRef.current = true;
+    setIsLoggingOut(true);
+    setLogoutError(null);
+    try {
+      await handleLogout();
+    } catch (error) {
+      setLogoutError(error?.message || "Failed to log out. Please try again.");
+    } finally {
+      isLoggingOutRef.current = false;
+      setIsLoggingOut(false);
+    }
+  };
 
   const handleReport = () => {
     const subject = encodeURIComponent("FitGen App Report");
@@ -70,19 +135,74 @@ export default function ProfileScreen() {
       </div>
       <div className="flex flex-col h-full">
         <div>
+          {isSyncFailed && (
+            <div
+              role="alert"
+              className="alert-error flex items-center justify-between gap-3 mb-4"
+            >
+              <span className="text-lg font-bold">
+                {syncError?.message || "Failed to sync your cloud data."}
+              </span>
+              <Button
+                text="Retry Sync"
+                onClick={() => retrySync?.()}
+                className="button btn-primary text-base font-bold uppercase p-2 letter-spacing-2 shrink-0"
+              />
+            </div>
+          )}
+          {isSyncPending && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="card p-3 mb-4 flex items-center justify-center gap-2 text-muted text-lg font-bold"
+            >
+              <Loader2 className="animate-spin" size={16} aria-hidden="true" />
+              <span>Syncing your cloud data...</span>
+            </div>
+          )}
+          {logoutError && (
+            <div
+              role="alert"
+              className="alert-error flex items-center justify-between gap-3 mb-4"
+            >
+              <span className="text-lg font-bold">{logoutError}</span>
+              <Button
+                text="Retry"
+                onClick={handleLogoutClick}
+                disabled={isLoggingOut}
+                className="button btn-primary text-base font-bold uppercase p-2 letter-spacing-2 shrink-0"
+              />
+            </div>
+          )}
           <Button
             text="RESET SYSTEM"
-            onClick={() => setActiveModal("reset")}
+            onClick={() => {
+              setResetError(null);
+              setActiveModal("reset");
+            }}
             className="button btn-danger w-full mb-4 text-2xl font-bold letter-spacing-2 p-3"
           />
           <Button
-            text="LOGOUT"
-            onClick={() => {
-              handleLogout();
-            }}
-            icon={LogOut}
+            text={
+              isLoggingOut ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2
+                    className="animate-spin"
+                    size={16}
+                    aria-hidden="true"
+                  />
+                  Logging out...
+                </span>
+              ) : (
+                "LOGOUT"
+              )
+            }
+            onClick={handleLogoutClick}
+            Icon={isLoggingOut ? null : LogOut}
             iconSize={20}
-            className="button btn-secondary w-full mb-4 text-2xl font-bold letter-spacing-2 p-3"
+            disabled={isLoggingOut}
+            aria-busy={isLoggingOut}
+            className="flex items-center justify-center gap-2 button btn-secondary w-full mb-4 text-2xl font-bold letter-spacing-2 p-3"
           />
         </div>
 
@@ -111,50 +231,82 @@ export default function ProfileScreen() {
         </div>
       </div>
 
-      <Modal
-        isOpen={activeModal === "delete-account"}
-        onClose={() => setActiveModal(null)}
-        title="Delete Account?"
-      >
-        <div className="flex flex-col gap-2">
-          <p className="text-lg mb-2">
-            Are you sure you want to delete your account? Once you delete your
-            account your data will be erased and you will not be able to get it
-            back.
-          </p>
-          <div className="flex justify-center w-full gap-2">
-            <Button
-              text="Cancel"
-              onClick={() => setActiveModal(null)}
-              className="button btn-muted w-full font-bold text-lg uppercase p-4 letter-spacing-2"
-            />
-            <Button
-              text="I'm Sure"
-              onClick={() => handleDeleteAccount()}
-              className="button btn-danger w-full font-bold text-lg uppercase p-4 letter-spacing-2"
-            />
-          </div>
-        </div>
-      </Modal>
+      {activeModal === "delete-account" && (
+        <DeleteAccountModal
+          isOpen
+          onClose={() => setActiveModal(null)}
+          onConfirmDelete={handleDeleteAccount}
+        />
+      )}
 
       <Modal
         isOpen={activeModal === "reset"}
-        onClose={() => setActiveModal(null)}
+        onClose={handleCloseResetModal}
         title="Reset Program?"
       >
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-4">
           <p className="text-lg">
-            Are you sure you want to reset current program?
+            Are you sure you want to reset your current program? Your workout
+            plan and profile will be cleared, but your workout history will be
+            preserved.
           </p>
+          {isSyncFailed && (
+            <div
+              role="alert"
+              className="alert-error flex items-center justify-between gap-3"
+            >
+              <span className="text-lg font-bold">
+                {syncError?.message || "Failed to sync your cloud data."}
+              </span>
+              <Button
+                text="Retry Sync"
+                onClick={() => retrySync?.()}
+                className="button btn-primary text-base font-bold uppercase p-2 letter-spacing-2 shrink-0"
+              />
+            </div>
+          )}
+          {isSyncPending && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="card p-3 flex items-center justify-center gap-2 text-muted text-lg font-bold"
+            >
+              <Loader2 className="animate-spin" size={16} aria-hidden="true" />
+              <span>Still syncing your cloud data...</span>
+            </div>
+          )}
+          {resetError && (
+            <div role="alert" className="alert-error text-lg font-bold">
+              {resetError}
+            </div>
+          )}
           <div className="flex justify-center w-full gap-2">
             <Button
               text="Cancel"
-              onClick={() => setActiveModal(null)}
+              onClick={handleCloseResetModal}
+              disabled={isResetting}
               className="button btn-muted w-full font-bold text-lg uppercase p-4 letter-spacing-2"
             />
             <Button
-              text="I'm Sure"
-              onClick={() => onResetSystem()}
+              text={
+                isResetting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2
+                      className="animate-spin"
+                      size={16}
+                      aria-hidden="true"
+                    />
+                    Resetting...
+                  </span>
+                ) : resetError ? (
+                  "Retry"
+                ) : (
+                  "Reset Program"
+                )
+              }
+              onClick={handleConfirmReset}
+              disabled={isResetting || isSyncPending || isSyncFailed}
+              aria-busy={isResetting}
               className="button btn-danger w-full font-bold text-lg uppercase p-4 letter-spacing-2"
             />
           </div>

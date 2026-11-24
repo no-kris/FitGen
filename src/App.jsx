@@ -24,8 +24,14 @@ function App() {
     history: [],
   });
 
-  const handleLogoutEvent = () => {
+  const clearStorage = () => {
     setUserData({ profile: null, plan: null, history: [] });
+    setActiveWorkout(null);
+    activeWorkoutStore.clear();
+  };
+
+  const handleLogoutEvent = () => {
+    clearStorage();
     setView("welcome");
   };
 
@@ -36,21 +42,21 @@ function App() {
   };
 
   const { user, setUser } = useAuthObserver(handleLogoutEvent);
-  const { isSynced, syncError } = useCloudSync(
+  const { isSynced, syncError, retrySync } = useCloudSync(
     user,
     userData,
     setUserData,
     handleSyncComplete
   );
 
-  const clearStorage = () => {
-    setUserData({ profile: null, plan: null, history: [] });
-    activeWorkoutStore.clear();
-  };
-
   const handleSavePlan = async (plan, profile) => {
     if (user) {
       if (!isSynced) {
+        if (syncError) {
+          throw new Error(
+            "Cloud sync failed. Please retry sync before saving your plan."
+          );
+        }
         throw new Error(
           "Still syncing your data from the cloud. Please try again in a moment."
         );
@@ -63,13 +69,25 @@ function App() {
 
   const handleResetSystem = async () => {
     if (user) {
-      try {
-        await firestoreService.clearUserData(user.uid);
-      } catch (error) {
-        console.error("Error clearing user data:", error);
+      if (!isSynced) {
+        if (syncError) {
+          throw new Error(
+            "Cloud sync failed. Please retry sync before resetting your program."
+          );
+        }
+        throw new Error(
+          "Still syncing your data from the cloud. Please try again in a moment."
+        );
       }
+      await firestoreService.resetUserProgram(user.uid);
     }
-    clearStorage();
+    activeWorkoutStore.clear();
+    setActiveWorkout(null);
+    setUserData((prev) => ({
+      ...prev,
+      profile: null,
+      plan: null,
+    }));
     setView("profile");
   };
 
@@ -78,6 +96,7 @@ function App() {
     setUser,
     isSynced,
     syncError,
+    retrySync,
     view,
     setView,
     userData,
