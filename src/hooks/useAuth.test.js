@@ -10,12 +10,6 @@ const authServiceMock = vi.hoisted(() => ({
   subscribeToAuthChanges: vi.fn(),
 }));
 
-const firestoreServiceMock = vi.hoisted(() => ({
-  clearUserData: vi.fn(),
-  resetUserProgram: vi.fn(),
-  deleteUserData: vi.fn(),
-}));
-
 const activeWorkoutStoreMock = vi.hoisted(() => ({
   clear: vi.fn(),
 }));
@@ -24,10 +18,6 @@ const emailServiceMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../services/firebase/authServices", () => ({
   authService: authServiceMock,
-}));
-
-vi.mock("../services/firebase/firestoreServices", () => ({
-  firestoreService: firestoreServiceMock,
 }));
 
 vi.mock("../services/storage/activeWorkoutStore", () => ({
@@ -61,6 +51,7 @@ describe("useAuth", () => {
       user: { uid: "u-1", isAnonymous: false },
       clearStorage: vi.fn(),
       setShowAuth: vi.fn(),
+      deleteAll: vi.fn(),
     });
 
     expect(Object.keys(handlers).sort()).toEqual([
@@ -91,6 +82,7 @@ describe("useAuth", () => {
     it("awaits authService.logout then clears activeWorkoutStore and invokes clearStorage without deleting cloud data", async () => {
       const callOrder = [];
       const clearStorage = vi.fn(() => callOrder.push("clearStorage"));
+      const deleteAll = vi.fn();
       authServiceMock.logout.mockImplementationOnce(async () => {
         callOrder.push("logout");
       });
@@ -102,6 +94,7 @@ describe("useAuth", () => {
         user: { uid: "u-1", isAnonymous: false },
         clearStorage,
         setShowAuth: vi.fn(),
+        deleteAll,
       });
 
       await handleLogout();
@@ -111,26 +104,25 @@ describe("useAuth", () => {
         "activeWorkoutStore.clear",
         "clearStorage",
       ]);
-      expect(firestoreServiceMock.deleteUserData).not.toHaveBeenCalled();
-      expect(firestoreServiceMock.resetUserProgram).not.toHaveBeenCalled();
-      expect(firestoreServiceMock.clearUserData).not.toHaveBeenCalled();
+      expect(deleteAll).not.toHaveBeenCalled();
       expect(authServiceMock.deleteAccount).not.toHaveBeenCalled();
     });
 
     it("clears storage on logout even if user.isAnonymous is true and handles omitted clearStorage", async () => {
       authServiceMock.logout.mockResolvedValueOnce(undefined);
+      const deleteAll = vi.fn();
 
       const { handleLogout } = useAuth({
         user: { uid: "anon-1", isAnonymous: true },
         setShowAuth: vi.fn(),
+        deleteAll,
       });
 
       await expect(handleLogout()).resolves.toBeUndefined();
 
       expect(authServiceMock.logout).toHaveBeenCalledTimes(1);
       expect(activeWorkoutStoreMock.clear).toHaveBeenCalledTimes(1);
-      expect(firestoreServiceMock.deleteUserData).not.toHaveBeenCalled();
-      expect(firestoreServiceMock.resetUserProgram).not.toHaveBeenCalled();
+      expect(deleteAll).not.toHaveBeenCalled();
       expect(authServiceMock.deleteAccount).not.toHaveBeenCalled();
     });
 
@@ -143,6 +135,7 @@ describe("useAuth", () => {
         user: { uid: "u-1", isAnonymous: false },
         clearStorage,
         setShowAuth: vi.fn(),
+        deleteAll: vi.fn(),
       });
 
       await expect(handleLogout()).rejects.toThrow(
@@ -158,16 +151,16 @@ describe("useAuth", () => {
   });
 
   describe("handleDeleteAccount", () => {
-    it("executes reauthenticate -> deleteUserData -> deleteAccount -> local cleanup in strict order with zero alert() calls", async () => {
+    it("executes reauthenticate -> deleteAll -> deleteAccount -> local cleanup in strict order with zero alert() calls", async () => {
       const callOrder = [];
       const clearStorage = vi.fn(() => callOrder.push("clearStorage"));
+      const deleteAll = vi.fn(async () => {
+        callOrder.push("deleteAll");
+        return { deletedWorkoutsCount: 3 };
+      });
 
       authServiceMock.reauthenticate.mockImplementationOnce(async (pw) => {
         callOrder.push(`reauthenticate:${pw}`);
-      });
-      firestoreServiceMock.deleteUserData.mockImplementationOnce(async (uid) => {
-        callOrder.push(`deleteUserData:${uid}`);
-        return { deletedWorkoutsCount: 3 };
       });
       authServiceMock.deleteAccount.mockImplementationOnce(async () => {
         callOrder.push("deleteAccount");
@@ -180,6 +173,7 @@ describe("useAuth", () => {
         user: { uid: "user-del-1", email: "user@example.com" },
         clearStorage,
         setShowAuth: vi.fn(),
+        deleteAll,
       });
 
       const result = await handleDeleteAccount("my pass 123");
@@ -187,20 +181,22 @@ describe("useAuth", () => {
       expect(result).toEqual({ deleted: true });
       expect(callOrder).toEqual([
         "reauthenticate:my pass 123",
-        "deleteUserData:user-del-1",
+        "deleteAll",
         "deleteAccount",
         "activeWorkoutStore.clear",
         "clearStorage",
       ]);
-      expect(firestoreServiceMock.clearUserData).not.toHaveBeenCalled();
+      expect(deleteAll).toHaveBeenCalledTimes(1);
       expect(globalThis.alert).not.toHaveBeenCalled();
     });
 
     it("rejects immediately when password is empty or missing with zero external calls", async () => {
       const clearStorage = vi.fn();
+      const deleteAll = vi.fn();
       const { handleDeleteAccount } = useAuth({
         user: { uid: "user-1" },
         clearStorage,
+        deleteAll,
       });
 
       await expect(handleDeleteAccount("")).rejects.toThrow(
@@ -211,8 +207,7 @@ describe("useAuth", () => {
       );
 
       expect(authServiceMock.reauthenticate).not.toHaveBeenCalled();
-      expect(firestoreServiceMock.deleteUserData).not.toHaveBeenCalled();
-      expect(firestoreServiceMock.clearUserData).not.toHaveBeenCalled();
+      expect(deleteAll).not.toHaveBeenCalled();
       expect(authServiceMock.deleteAccount).not.toHaveBeenCalled();
       expect(activeWorkoutStoreMock.clear).not.toHaveBeenCalled();
       expect(clearStorage).not.toHaveBeenCalled();
@@ -221,9 +216,11 @@ describe("useAuth", () => {
 
     it("rejects immediately when user or user.uid is missing with zero external calls", async () => {
       const clearStorage = vi.fn();
+      const deleteAll = vi.fn();
       const { handleDeleteAccount } = useAuth({
         user: null,
         clearStorage,
+        deleteAll,
       });
 
       await expect(handleDeleteAccount("secret")).rejects.toThrow(
@@ -231,18 +228,38 @@ describe("useAuth", () => {
       );
 
       expect(authServiceMock.reauthenticate).not.toHaveBeenCalled();
-      expect(firestoreServiceMock.deleteUserData).not.toHaveBeenCalled();
+      expect(deleteAll).not.toHaveBeenCalled();
       expect(authServiceMock.deleteAccount).not.toHaveBeenCalled();
       expect(activeWorkoutStoreMock.clear).not.toHaveBeenCalled();
       expect(clearStorage).not.toHaveBeenCalled();
       expect(globalThis.alert).not.toHaveBeenCalled();
     });
 
-    it("aborts on re-auth wrong-password / invalid-credential and makes zero Firestore, Auth delete, or storage cleanup calls", async () => {
+    it("fails closed before re-authenticating when deleteAll is missing or not a function", async () => {
       const clearStorage = vi.fn();
       const { handleDeleteAccount } = useAuth({
         user: { uid: "user-1" },
         clearStorage,
+      });
+
+      await expect(handleDeleteAccount("secret")).rejects.toThrow(
+        "Account deletion is unavailable. Please try again."
+      );
+
+      expect(authServiceMock.reauthenticate).not.toHaveBeenCalled();
+      expect(authServiceMock.deleteAccount).not.toHaveBeenCalled();
+      expect(activeWorkoutStoreMock.clear).not.toHaveBeenCalled();
+      expect(clearStorage).not.toHaveBeenCalled();
+      expect(globalThis.alert).not.toHaveBeenCalled();
+    });
+
+    it("aborts on re-auth wrong-password / invalid-credential and makes zero deleteAll, Auth delete, or storage cleanup calls", async () => {
+      const clearStorage = vi.fn();
+      const deleteAll = vi.fn();
+      const { handleDeleteAccount } = useAuth({
+        user: { uid: "user-1" },
+        clearStorage,
+        deleteAll,
       });
 
       for (const code of ["auth/wrong-password", "auth/invalid-credential"]) {
@@ -257,8 +274,7 @@ describe("useAuth", () => {
           stage: "reauthenticate",
         });
 
-        expect(firestoreServiceMock.deleteUserData).not.toHaveBeenCalled();
-        expect(firestoreServiceMock.clearUserData).not.toHaveBeenCalled();
+        expect(deleteAll).not.toHaveBeenCalled();
         expect(authServiceMock.deleteAccount).not.toHaveBeenCalled();
         expect(activeWorkoutStoreMock.clear).not.toHaveBeenCalled();
         expect(clearStorage).not.toHaveBeenCalled();
@@ -270,6 +286,7 @@ describe("useAuth", () => {
       const { handleDeleteAccount } = useAuth({
         user: { uid: "user-1" },
         clearStorage: vi.fn(),
+        deleteAll: vi.fn(),
       });
 
       const cases = [
@@ -299,18 +316,19 @@ describe("useAuth", () => {
       }
     });
 
-    it("aborts on Firestore deleteUserData failure without deleting Auth account or clearing local storage", async () => {
+    it("aborts on deleteAll failure without deleting Auth account or clearing local storage", async () => {
       const clearStorage = vi.fn();
-      authServiceMock.reauthenticate.mockResolvedValueOnce(undefined);
-      firestoreServiceMock.deleteUserData.mockRejectedValueOnce(
+      const deleteAll = vi.fn().mockRejectedValueOnce(
         Object.assign(new Error("permission-denied"), {
           code: "permission-denied",
         })
       );
+      authServiceMock.reauthenticate.mockResolvedValueOnce(undefined);
 
       const { handleDeleteAccount } = useAuth({
         user: { uid: "user-fs-fail" },
         clearStorage,
+        deleteAll,
       });
 
       await expect(handleDeleteAccount("good-pass")).rejects.toMatchObject({
@@ -321,9 +339,7 @@ describe("useAuth", () => {
       });
 
       expect(authServiceMock.reauthenticate).toHaveBeenCalledTimes(1);
-      expect(firestoreServiceMock.deleteUserData).toHaveBeenCalledWith(
-        "user-fs-fail"
-      );
+      expect(deleteAll).toHaveBeenCalledTimes(1);
       expect(authServiceMock.deleteAccount).not.toHaveBeenCalled();
       expect(activeWorkoutStoreMock.clear).not.toHaveBeenCalled();
       expect(clearStorage).not.toHaveBeenCalled();
@@ -332,15 +348,15 @@ describe("useAuth", () => {
 
     it("propagates Auth deleteAccount failures with stage=auth and does not clear storage", async () => {
       const clearStorage = vi.fn();
+      const deleteAll = vi.fn();
       const { handleDeleteAccount } = useAuth({
         user: { uid: "user-auth-fail" },
         clearStorage,
+        deleteAll,
       });
 
       authServiceMock.reauthenticate.mockResolvedValueOnce(undefined);
-      firestoreServiceMock.deleteUserData.mockResolvedValueOnce({
-        deletedWorkoutsCount: 0,
-      });
+      deleteAll.mockResolvedValueOnce({ deletedWorkoutsCount: 0 });
       authServiceMock.deleteAccount.mockRejectedValueOnce(
         Object.assign(new Error("Recent login required"), {
           code: "auth/requires-recent-login",
@@ -359,9 +375,7 @@ describe("useAuth", () => {
 
       vi.clearAllMocks();
       authServiceMock.reauthenticate.mockResolvedValueOnce(undefined);
-      firestoreServiceMock.deleteUserData.mockResolvedValueOnce({
-        deletedWorkoutsCount: 1,
-      });
+      deleteAll.mockResolvedValueOnce({ deletedWorkoutsCount: 1 });
       authServiceMock.deleteAccount.mockRejectedValueOnce(
         Object.assign(new Error("Internal error"), {
           code: "auth/internal-error",

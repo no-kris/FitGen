@@ -1,7 +1,6 @@
 import { useRef } from "react";
 import generateNextWeekPlan from "../utils/generateNextWeekPlan";
 import parseSetsCount from "../utils/parseSetsCount";
-import { firestoreService } from "../services/firebase/firestoreServices";
 import { activeWorkoutStore } from "../services/storage/activeWorkoutStore";
 import { useAppContext } from "../context/AppContext";
 
@@ -42,21 +41,34 @@ function syncSavedLogsWithDay(savedLogs, day) {
 export function useWorkout() {
   const {
     user,
+    status,
     isSynced,
     syncError,
     userData,
-    setUserData,
+    plan: ctxPlan,
+    profile: ctxProfile,
+    workouts: ctxWorkouts,
+    updatePlan,
+    addWorkout,
     setView,
     setActiveWorkout,
   } = useAppContext();
-  const { plan, profile, history } = userData;
+  const plan = ctxPlan !== undefined ? ctxPlan : userData?.plan ?? null;
+  const profile = ctxProfile !== undefined ? ctxProfile : userData?.profile ?? null;
+  const workouts = ctxWorkouts !== undefined ? ctxWorkouts : userData?.history ?? [];
   const isFinishingRef = useRef(false);
 
   const assertCloudSynced = () => {
-    if (user && !isSynced) {
-      if (syncError) {
-        throw new Error(SYNC_FAILED_ERROR);
-      }
+    if (!user) {
+      return;
+    }
+    const isSyncFailed = status === "error" || (!isSynced && Boolean(syncError));
+    if (isSyncFailed) {
+      throw new Error(SYNC_FAILED_ERROR);
+    }
+    const isSyncPending =
+      status === "loading" || (status === undefined && !isSynced);
+    if (isSyncPending) {
       throw new Error(SYNC_PENDING_ERROR);
     }
   };
@@ -67,7 +79,7 @@ export function useWorkout() {
     const result = await generateNextWeekPlan(
       profile,
       plan,
-      history,
+      workouts,
       feedback
     );
     const newWeek = result.weeks[0];
@@ -78,11 +90,7 @@ export function useWorkout() {
       weeks: [...plan.weeks, newWeek],
     };
 
-    if (user) {
-      await firestoreService.saveUserData(user.uid, { plan: newWeekPlan });
-    }
-
-    setUserData((prev) => ({ ...prev, plan: newWeekPlan }));
+    await updatePlan(newWeekPlan);
     setView("plan");
     return newWeekPlan;
   };
@@ -127,11 +135,7 @@ export function useWorkout() {
       }),
     };
 
-    if (user) {
-      await firestoreService.saveUserData(user.uid, { plan: newPlan });
-    }
-
-    setUserData((prev) => ({ ...prev, plan: newPlan }));
+    await updatePlan(newPlan);
     return newPlan;
   };
 
@@ -231,14 +235,8 @@ export function useWorkout() {
         completedAt: new Date().toISOString(),
       };
 
-      const savedEntry = user
-        ? await firestoreService.addWorkout(user.uid, workoutPayload)
-        : { id: `local-${Date.now()}`, ...workoutPayload };
+      const savedEntry = await addWorkout(workoutPayload);
 
-      setUserData((prev) => ({
-        ...prev,
-        history: [...prev.history, savedEntry],
-      }));
       activeWorkoutStore.clear();
       setActiveWorkout(null);
       setView("logs");

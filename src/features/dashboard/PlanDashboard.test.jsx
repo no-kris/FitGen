@@ -11,19 +11,6 @@ import {
 } from "@testing-library/react";
 import { AppContext } from "../../context/AppContext";
 
-const firestoreServiceMock = vi.hoisted(() => ({
-  saveUserData: vi.fn(),
-  addWorkout: vi.fn(),
-  getWorkouts: vi.fn(),
-  getUserData: vi.fn(),
-  migrateLegacyHistory: vi.fn(),
-  clearUserData: vi.fn(),
-}));
-
-vi.mock("../../services/firebase/firestoreServices", () => ({
-  firestoreService: firestoreServiceMock,
-}));
-
 import PlanDashboard from "./PlanDashboard";
 
 const ACTIVE_KEY = "fitgen:active:v1";
@@ -144,8 +131,8 @@ function renderDashboard({
   isSynced = true,
   syncError = null,
   retrySync = vi.fn(),
+  updatePlan = vi.fn(async (nextPlan) => nextPlan),
 } = {}) {
-  const setUserData = vi.fn();
   const setView = vi.fn();
   const setActiveWorkout = vi.fn();
 
@@ -159,7 +146,7 @@ function renderDashboard({
       plan: "plan" in overrides ? overrides.plan : plan,
       history: "history" in overrides ? overrides.history : history,
     },
-    setUserData,
+    updatePlan: "updatePlan" in overrides ? overrides.updatePlan : updatePlan,
     setView,
     setActiveWorkout,
   });
@@ -181,7 +168,7 @@ function renderDashboard({
   return {
     ...view,
     rerenderDashboard,
-    setUserData,
+    updatePlan,
     setView,
     setActiveWorkout,
     retrySync,
@@ -195,6 +182,7 @@ function StatefulDashboardHarness({
   isSynced = true,
   syncError = null,
   retrySync = vi.fn(),
+  updatePlan: updatePlanProp,
   onPlanChange,
 }) {
   const [userData, setUserDataState] = useState({
@@ -203,12 +191,15 @@ function StatefulDashboardHarness({
     history: initialHistory,
   });
 
-  const setUserData = (updater) => {
+  const updatePlan = async (nextPlan) => {
+    if (updatePlanProp) {
+      await updatePlanProp(nextPlan);
+    }
     setUserDataState((prev) => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      onPlanChange?.(next.plan);
-      return next;
+      onPlanChange?.(nextPlan);
+      return { ...prev, plan: nextPlan };
     });
+    return nextPlan;
   };
 
   return (
@@ -219,7 +210,7 @@ function StatefulDashboardHarness({
         syncError,
         retrySync,
         userData,
-        setUserData,
+        updatePlan,
         setView: vi.fn(),
         setActiveWorkout: vi.fn(),
       }}
@@ -577,14 +568,13 @@ describe("PlanDashboard", () => {
     it("immutably swaps an exercise in Week 1 without jumping week tabs or mutating the frozen plan", async () => {
       const frozenPlan = deepFreeze(makeMultiWeekPlan(2, 4));
       const saveDeferred = createDeferred();
-      firestoreServiceMock.saveUserData.mockReturnValueOnce(
-        saveDeferred.promise
-      );
+      const updatePlanMock = vi.fn().mockReturnValueOnce(saveDeferred.promise);
       let latestPlan = frozenPlan;
 
       render(
         <StatefulDashboardHarness
           initialPlan={frozenPlan}
+          updatePlan={updatePlanMock}
           onPlanChange={(nextPlan) => {
             latestPlan = nextPlan;
           }}
@@ -614,7 +604,7 @@ describe("PlanDashboard", () => {
         within(dialog).getByRole("button", { name: "Dumbbell Press" })
       );
 
-      expect(firestoreServiceMock.saveUserData).toHaveBeenCalledTimes(1);
+      expect(updatePlanMock).toHaveBeenCalledTimes(1);
       expect(
         within(dialog).getByRole("button", { name: /swapping/i })
       ).not.toBeNull();
@@ -664,11 +654,17 @@ describe("PlanDashboard", () => {
 
     it("propagates swap save failures into DayDetailModal alert with Retry instead of swallowing them", async () => {
       const frozenPlan = deepFreeze(makeMultiWeekPlan(2, 4));
-      firestoreServiceMock.saveUserData
+      const updatePlanMock = vi
+        .fn()
         .mockRejectedValueOnce(new Error("Cloud write failed"))
         .mockResolvedValueOnce(undefined);
 
-      render(<StatefulDashboardHarness initialPlan={frozenPlan} />);
+      render(
+        <StatefulDashboardHarness
+          initialPlan={frozenPlan}
+          updatePlan={updatePlanMock}
+        />
+      );
 
       fireEvent.click(screen.getByRole("button", { name: "Week 1" }));
       fireEvent.click(
@@ -694,7 +690,7 @@ describe("PlanDashboard", () => {
         await Promise.resolve();
       });
 
-      expect(firestoreServiceMock.saveUserData).toHaveBeenCalledTimes(2);
+      expect(updatePlanMock).toHaveBeenCalledTimes(2);
       expect(within(dialog).queryByRole("alert")).toBeNull();
       expect(
         within(dialog).getByRole("heading", { name: "Dumbbell Press" })

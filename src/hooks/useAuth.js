@@ -1,5 +1,4 @@
 import { authService } from "../services/firebase/authServices";
-import { firestoreService } from "../services/firebase/firestoreServices";
 import { activeWorkoutStore } from "../services/storage/activeWorkoutStore";
 import sendWelcomeMessage from "../services/api/emailService";
 
@@ -22,7 +21,7 @@ function mapReauthErrorMessage(error) {
   }
 }
 
-export function useAuth({ user, clearStorage, setShowAuth } = {}) {
+export function useAuth({ user, clearStorage, setShowAuth, deleteAll } = {}) {
   const handleSignUp = async (userData) => {
     try {
       await authService.signUp(userData.email, userData.password);
@@ -60,6 +59,9 @@ export function useAuth({ user, clearStorage, setShowAuth } = {}) {
     if (typeof password !== "string" || password.length === 0) {
       throw new Error("Please enter your password to confirm account deletion.");
     }
+    if (typeof deleteAll !== "function") {
+      throw new Error("Account deletion is unavailable. Please try again.");
+    }
 
     try {
       await authService.reauthenticate(password);
@@ -72,7 +74,7 @@ export function useAuth({ user, clearStorage, setShowAuth } = {}) {
     }
 
     try {
-      await firestoreService.deleteUserData(user.uid);
+      await deleteAll();
     } catch (error) {
       console.error("Failed to delete user data:", error);
       const err = new Error(

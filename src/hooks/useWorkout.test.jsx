@@ -3,20 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, cleanup } from "@testing-library/react";
 import { AppContext } from "../context/AppContext";
 
-const firestoreServiceMock = vi.hoisted(() => ({
-  saveUserData: vi.fn(),
-  addWorkout: vi.fn(),
-  getWorkouts: vi.fn(),
-  getUserData: vi.fn(),
-  migrateLegacyHistory: vi.fn(),
-  clearUserData: vi.fn(),
-}));
-
 const generateNextWeekPlanMock = vi.hoisted(() => vi.fn());
-
-vi.mock("../services/firebase/firestoreServices", () => ({
-  firestoreService: firestoreServiceMock,
-}));
 
 vi.mock("../utils/generateNextWeekPlan", () => ({
   default: generateNextWeekPlanMock,
@@ -96,19 +83,41 @@ function renderUseWorkout(overrides = {}) {
     plan: makePlan(),
     history: [],
   };
-  const setUserData = vi.fn((updater) => {
-    userDataState =
-      typeof updater === "function" ? updater(userDataState) : updater;
+  const updatePlanImpl = overrides.updatePlan;
+  const updatePlan = vi.fn(async (nextPlan) => {
+    if (updatePlanImpl) {
+      await updatePlanImpl(nextPlan);
+    }
+    userDataState = { ...userDataState, plan: nextPlan };
+    return nextPlan;
+  });
+  const addWorkoutImpl = overrides.addWorkout;
+  const addWorkout = vi.fn(async (payload) => {
+    const saved = addWorkoutImpl
+      ? await addWorkoutImpl(payload)
+      : { id: "doc-default", ...payload };
+    userDataState = {
+      ...userDataState,
+      history: [...userDataState.history, saved],
+    };
+    return saved;
   });
   const setView = vi.fn();
   const setActiveWorkout = vi.fn();
 
   const contextValue = {
     user: "user" in overrides ? overrides.user : { uid: "user-1" },
+    ...("status" in overrides ? { status: overrides.status } : {}),
     isSynced: "isSynced" in overrides ? overrides.isSynced : true,
     syncError: "syncError" in overrides ? overrides.syncError : null,
-    userData: userDataState,
-    setUserData,
+    ...("userData" in overrides && overrides.userData === undefined
+      ? {}
+      : { userData: userDataState }),
+    ...("plan" in overrides ? { plan: overrides.plan } : {}),
+    ...("profile" in overrides ? { profile: overrides.profile } : {}),
+    ...("workouts" in overrides ? { workouts: overrides.workouts } : {}),
+    updatePlan,
+    addWorkout,
     setView,
     setActiveWorkout,
   };
@@ -120,7 +129,8 @@ function renderUseWorkout(overrides = {}) {
   const hook = renderHook(() => useWorkout(), { wrapper });
   return {
     ...hook,
-    setUserData,
+    updatePlan,
+    addWorkout,
     setView,
     setActiveWorkout,
     getUserData: () => userDataState,
@@ -138,8 +148,8 @@ describe("useWorkout", () => {
     vi.useRealTimers();
   });
 
-  describe("sync guard when user is signed in and isSynced is false", () => {
-    it("rejects handleFinishWorkout without writing to Firestore or clearing state", async () => {
+  describe("sync guard when user is signed in and sync is pending (legacy isSynced=false or status=loading)", () => {
+    it("rejects handleFinishWorkout without calling addWorkout or clearing state", async () => {
       localStorage.setItem(
         ACTIVE_KEY,
         JSON.stringify({
@@ -153,7 +163,7 @@ describe("useWorkout", () => {
         })
       );
 
-      const { result, setUserData, setActiveWorkout, setView } =
+      const { result, addWorkout, updatePlan, setActiveWorkout, setView } =
         renderUseWorkout({ isSynced: false });
 
       await expect(
@@ -171,47 +181,73 @@ describe("useWorkout", () => {
         )
       ).rejects.toThrow(SYNC_PENDING_ERROR);
 
-      expect(firestoreServiceMock.addWorkout).not.toHaveBeenCalled();
-      expect(firestoreServiceMock.saveUserData).not.toHaveBeenCalled();
-      expect(setUserData).not.toHaveBeenCalled();
+      expect(addWorkout).not.toHaveBeenCalled();
+      expect(updatePlan).not.toHaveBeenCalled();
       expect(setActiveWorkout).not.toHaveBeenCalled();
       expect(setView).not.toHaveBeenCalled();
       expect(localStorage.getItem(ACTIVE_KEY)).not.toBeNull();
     });
 
-    it("rejects handleGenerateNextWeek without calling model or Firestore", async () => {
-      const { result, setUserData, setView } = renderUseWorkout({
-        isSynced: false,
-      });
+    it("rejects handleGenerateNextWeek without calling model or updatePlan (isSynced=false and status=loading)", async () => {
+      const legacy = renderUseWorkout({ isSynced: false });
 
       await expect(
         Promise.resolve().then(() =>
-          result.current.handleGenerateNextWeek("Felt great")
+          legacy.result.current.handleGenerateNextWeek("Felt great")
         )
       ).rejects.toThrow(SYNC_PENDING_ERROR);
 
       expect(generateNextWeekPlanMock).not.toHaveBeenCalled();
-      expect(firestoreServiceMock.saveUserData).not.toHaveBeenCalled();
-      expect(setUserData).not.toHaveBeenCalled();
-      expect(setView).not.toHaveBeenCalled();
-    });
+      expect(legacy.updatePlan).not.toHaveBeenCalled();
+      expect(legacy.setView).not.toHaveBeenCalled();
 
-    it("rejects handleReplaceExercise without writing to Firestore or mutating state", async () => {
-      const { result, setUserData } = renderUseWorkout({ isSynced: false });
+      cleanup();
+
+      const unified = renderUseWorkout({ status: "loading", isSynced: false });
 
       await expect(
         Promise.resolve().then(() =>
-          result.current.handleReplaceExercise(0, 0, 0, "Dumbbell Press")
+          unified.result.current.handleGenerateNextWeek("Felt great")
         )
       ).rejects.toThrow(SYNC_PENDING_ERROR);
 
-      expect(firestoreServiceMock.saveUserData).not.toHaveBeenCalled();
-      expect(setUserData).not.toHaveBeenCalled();
+      expect(generateNextWeekPlanMock).not.toHaveBeenCalled();
+      expect(unified.updatePlan).not.toHaveBeenCalled();
+      expect(unified.setView).not.toHaveBeenCalled();
+    });
+
+    it("rejects handleReplaceExercise without calling updatePlan (isSynced=false and status=loading)", async () => {
+      const legacy = renderUseWorkout({ isSynced: false });
+
+      await expect(
+        Promise.resolve().then(() =>
+          legacy.result.current.handleReplaceExercise(0, 0, 0, "Dumbbell Press")
+        )
+      ).rejects.toThrow(SYNC_PENDING_ERROR);
+
+      expect(legacy.updatePlan).not.toHaveBeenCalled();
+
+      cleanup();
+
+      const unified = renderUseWorkout({ status: "loading", isSynced: false });
+
+      await expect(
+        Promise.resolve().then(() =>
+          unified.result.current.handleReplaceExercise(
+            0,
+            0,
+            0,
+            "Dumbbell Press"
+          )
+        )
+      ).rejects.toThrow(SYNC_PENDING_ERROR);
+
+      expect(unified.updatePlan).not.toHaveBeenCalled();
     });
   });
 
-  describe("sync guard when user is signed in and syncError is set", () => {
-    it("rejects handleFinishWorkout with sync-failed error without writing to Firestore or clearing state", async () => {
+  describe("sync guard when user is signed in and sync failed (legacy syncError or status=error)", () => {
+    it("rejects handleFinishWorkout with sync-failed error without calling addWorkout or clearing state", async () => {
       localStorage.setItem(
         ACTIVE_KEY,
         JSON.stringify({
@@ -225,7 +261,7 @@ describe("useWorkout", () => {
         })
       );
 
-      const { result, setUserData, setActiveWorkout, setView } =
+      const { result, addWorkout, updatePlan, setActiveWorkout, setView } =
         renderUseWorkout({
           isSynced: false,
           syncError: new Error("Firestore unavailable"),
@@ -246,55 +282,89 @@ describe("useWorkout", () => {
         )
       ).rejects.toThrow(SYNC_FAILED_ERROR);
 
-      expect(firestoreServiceMock.addWorkout).not.toHaveBeenCalled();
-      expect(firestoreServiceMock.saveUserData).not.toHaveBeenCalled();
-      expect(setUserData).not.toHaveBeenCalled();
+      expect(addWorkout).not.toHaveBeenCalled();
+      expect(updatePlan).not.toHaveBeenCalled();
       expect(setActiveWorkout).not.toHaveBeenCalled();
       expect(setView).not.toHaveBeenCalled();
       expect(localStorage.getItem(ACTIVE_KEY)).not.toBeNull();
     });
 
-    it("rejects handleGenerateNextWeek with sync-failed error without calling model or Firestore", async () => {
-      const { result, setUserData, setView } = renderUseWorkout({
+    it("rejects handleGenerateNextWeek with sync-failed error without calling model or updatePlan (syncError and status=error)", async () => {
+      const legacy = renderUseWorkout({
         isSynced: false,
         syncError: new Error("Firestore unavailable"),
       });
 
       await expect(
         Promise.resolve().then(() =>
-          result.current.handleGenerateNextWeek("Felt great")
+          legacy.result.current.handleGenerateNextWeek("Felt great")
         )
       ).rejects.toThrow(SYNC_FAILED_ERROR);
 
       expect(generateNextWeekPlanMock).not.toHaveBeenCalled();
-      expect(firestoreServiceMock.saveUserData).not.toHaveBeenCalled();
-      expect(setUserData).not.toHaveBeenCalled();
-      expect(setView).not.toHaveBeenCalled();
+      expect(legacy.updatePlan).not.toHaveBeenCalled();
+      expect(legacy.setView).not.toHaveBeenCalled();
+
+      cleanup();
+
+      const unified = renderUseWorkout({
+        status: "error",
+        isSynced: false,
+        syncError: null,
+      });
+
+      await expect(
+        Promise.resolve().then(() =>
+          unified.result.current.handleGenerateNextWeek("Felt great")
+        )
+      ).rejects.toThrow(SYNC_FAILED_ERROR);
+
+      expect(generateNextWeekPlanMock).not.toHaveBeenCalled();
+      expect(unified.updatePlan).not.toHaveBeenCalled();
+      expect(unified.setView).not.toHaveBeenCalled();
     });
 
-    it("rejects handleReplaceExercise with sync-failed error without writing to Firestore or mutating state", async () => {
-      const { result, setUserData } = renderUseWorkout({
+    it("rejects handleReplaceExercise with sync-failed error without calling updatePlan (syncError and status=error)", async () => {
+      const legacy = renderUseWorkout({
         isSynced: false,
         syncError: new Error("Firestore unavailable"),
       });
 
       await expect(
         Promise.resolve().then(() =>
-          result.current.handleReplaceExercise(0, 0, 0, "Dumbbell Press")
+          legacy.result.current.handleReplaceExercise(0, 0, 0, "Dumbbell Press")
         )
       ).rejects.toThrow(SYNC_FAILED_ERROR);
 
-      expect(firestoreServiceMock.saveUserData).not.toHaveBeenCalled();
-      expect(setUserData).not.toHaveBeenCalled();
+      expect(legacy.updatePlan).not.toHaveBeenCalled();
+
+      cleanup();
+
+      const unified = renderUseWorkout({
+        status: "error",
+        isSynced: false,
+        syncError: null,
+      });
+
+      await expect(
+        Promise.resolve().then(() =>
+          unified.result.current.handleReplaceExercise(
+            0,
+            0,
+            0,
+            "Dumbbell Press"
+          )
+        )
+      ).rejects.toThrow(SYNC_FAILED_ERROR);
+
+      expect(unified.updatePlan).not.toHaveBeenCalled();
     });
   });
 
   describe("handleGenerateNextWeek", () => {
-    it("falls back to previous plan programName and description, awaits saveUserData, and switches to plan view", async () => {
+    it("falls back to previous plan programName and description, awaits updatePlan, and switches to plan view", async () => {
       const saveDeferred = createDeferred();
-      firestoreServiceMock.saveUserData.mockReturnValueOnce(
-        saveDeferred.promise
-      );
+      const updatePlanImpl = vi.fn().mockReturnValueOnce(saveDeferred.promise);
       const nextWeek = {
         weekNumber: 2,
         description: "Week 2",
@@ -305,7 +375,9 @@ describe("useWorkout", () => {
         weeks: [nextWeek],
       });
 
-      const { result, setView, getUserData } = renderUseWorkout();
+      const { result, updatePlan, setView, getUserData } = renderUseWorkout({
+        updatePlan: updatePlanImpl,
+      });
 
       const pending = result.current.handleGenerateNextWeek("Good week");
 
@@ -317,51 +389,82 @@ describe("useWorkout", () => {
       saveDeferred.resolve(undefined);
       const savedPlan = await pending;
 
-      expect(firestoreServiceMock.saveUserData).toHaveBeenCalledWith("user-1", {
-        plan: expect.objectContaining({
+      expect(updatePlan).toHaveBeenCalledWith(
+        expect.objectContaining({
           programName: "Alpha Strength",
           description: "4-week linear progression",
           weeks: expect.arrayContaining([nextWeek]),
-        }),
-      });
+        })
+      );
       expect(savedPlan.programName).toBe("Alpha Strength");
       expect(savedPlan.description).toBe("4-week linear progression");
       expect(getUserData().plan.weeks).toHaveLength(2);
       expect(setView).toHaveBeenCalledWith("plan");
     });
 
-    it("rethrows errors from saveUserData instead of swallowing them", async () => {
+    it("resolves first-class plan, profile, and workouts from AppContext when userData is omitted", async () => {
+      const directPlan = makePlan();
+      const directProfile = { goal: "powerlifting" };
+      const directWorkouts = [{ id: "w-1" }];
+      const nextWeek = { weekNumber: 2, schedule: [] };
+      generateNextWeekPlanMock.mockResolvedValueOnce({ weeks: [nextWeek] });
+
+      const { result, updatePlan, setView } = renderUseWorkout({
+        userData: undefined,
+        plan: directPlan,
+        profile: directProfile,
+        workouts: directWorkouts,
+      });
+
+      await result.current.handleGenerateNextWeek("Strong week");
+
+      expect(generateNextWeekPlanMock).toHaveBeenCalledWith(
+        directProfile,
+        directPlan,
+        directWorkouts,
+        "Strong week"
+      );
+      expect(updatePlan).toHaveBeenCalledTimes(1);
+      expect(setView).toHaveBeenCalledWith("plan");
+    });
+
+    it("rethrows errors from updatePlan instead of swallowing them", async () => {
       generateNextWeekPlanMock.mockResolvedValueOnce({
         programName: "Alpha Strength",
         description: "Week 2",
         weeks: [{ weekNumber: 2, schedule: [] }],
       });
-      firestoreServiceMock.saveUserData.mockRejectedValueOnce(
-        new Error("Write rejected")
-      );
+      const updatePlanImpl = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("Write rejected"));
 
-      const { result, setUserData, setView } = renderUseWorkout();
+      const { result, setView } = renderUseWorkout({
+        updatePlan: updatePlanImpl,
+      });
 
       await expect(
         result.current.handleGenerateNextWeek("Sore shoulder")
       ).rejects.toThrow("Write rejected");
 
-      expect(setUserData).not.toHaveBeenCalled();
       expect(setView).not.toHaveBeenCalled();
     });
   });
 
   describe("handleReplaceExercise", () => {
-    it("immutably updates exercise and alternatives (even when missing), awaits saveUserData, and rethrows on failure", async () => {
+    it("immutably updates exercise and alternatives (even when missing), awaits updatePlan, and rethrows on failure", async () => {
       const initialPlan = makePlan();
-      firestoreServiceMock.saveUserData.mockResolvedValueOnce(undefined);
+      const updatePlanImpl = vi
+        .fn()
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error("Save failed"));
 
-      const { result, getUserData } = renderUseWorkout({
+      const { result, updatePlan, getUserData } = renderUseWorkout({
         userData: {
           profile: { goal: "strength" },
           plan: initialPlan,
           history: [],
         },
+        updatePlan: updatePlanImpl,
       });
 
       const updatedPlan = await result.current.handleReplaceExercise(
@@ -371,21 +474,19 @@ describe("useWorkout", () => {
         "Arnold Press"
       );
 
-      expect(firestoreServiceMock.saveUserData).toHaveBeenCalledTimes(1);
-      expect(
-        updatedPlan.weeks[0].schedule[0].exercises[1].name
-      ).toBe("Arnold Press");
-      expect(
-        updatedPlan.weeks[0].schedule[0].exercises[1].alternatives
-      ).toEqual(["Overhead Press"]);
-      expect(
-        initialPlan.weeks[0].schedule[0].exercises[1].name
-      ).toBe("Overhead Press");
+      expect(updatePlan).toHaveBeenCalledTimes(1);
+      expect(updatePlan).toHaveBeenCalledWith(updatedPlan);
+      expect(updatedPlan.weeks[0].schedule[0].exercises[1].name).toBe(
+        "Arnold Press"
+      );
+      expect(updatedPlan.weeks[0].schedule[0].exercises[1].alternatives).toEqual([
+        "Overhead Press",
+      ]);
+      expect(initialPlan.weeks[0].schedule[0].exercises[1].name).toBe(
+        "Overhead Press"
+      );
       expect(getUserData().plan).toBe(updatedPlan);
 
-      firestoreServiceMock.saveUserData.mockRejectedValueOnce(
-        new Error("Save failed")
-      );
       await expect(
         result.current.handleReplaceExercise(0, 0, 0, "Dumbbell Press")
       ).rejects.toThrow("Save failed");
@@ -393,7 +494,7 @@ describe("useWorkout", () => {
   });
 
   describe("handleFinishWorkout", () => {
-    it("saves lean workout via addWorkout, updates history, clears storage, and navigates to logs only after resolve", async () => {
+    it("delegates lean workout payload to addWorkout, clears storage, and navigates to logs only after resolve", async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date("2026-11-23T10:15:00.000Z"));
 
@@ -401,10 +502,10 @@ describe("useWorkout", () => {
       localStorage.setItem(LEGACY_ACTIVE_KEY, JSON.stringify({ old: true }));
 
       const addDeferred = createDeferred();
-      firestoreServiceMock.addWorkout.mockReturnValueOnce(addDeferred.promise);
+      const addWorkoutImpl = vi.fn().mockReturnValueOnce(addDeferred.promise);
 
-      const { result, setActiveWorkout, setView, getUserData } =
-        renderUseWorkout();
+      const { result, addWorkout, updatePlan, setActiveWorkout, setView, getUserData } =
+        renderUseWorkout({ addWorkout: addWorkoutImpl });
 
       const finishPromise = result.current.handleFinishWorkout({
         workout: {
@@ -423,8 +524,8 @@ describe("useWorkout", () => {
         duration: 1800,
       });
 
-      expect(firestoreServiceMock.addWorkout).toHaveBeenCalledTimes(1);
-      expect(firestoreServiceMock.addWorkout).toHaveBeenCalledWith("user-1", {
+      expect(addWorkout).toHaveBeenCalledTimes(1);
+      expect(addWorkout).toHaveBeenCalledWith({
         weekNumber: 1,
         dayNumber: 1,
         dayName: "Monday",
@@ -438,7 +539,7 @@ describe("useWorkout", () => {
         duration: 1800,
         completedAt: "2026-11-23T10:15:00.000Z",
       });
-      expect(firestoreServiceMock.saveUserData).not.toHaveBeenCalled();
+      expect(updatePlan).not.toHaveBeenCalled();
       expect(setActiveWorkout).not.toHaveBeenCalled();
       expect(setView).not.toHaveBeenCalled();
       expect(localStorage.getItem(ACTIVE_KEY)).not.toBeNull();
@@ -472,9 +573,11 @@ describe("useWorkout", () => {
 
     it("guards against concurrent double-finish calls synchronously so addWorkout runs once", async () => {
       const addDeferred = createDeferred();
-      firestoreServiceMock.addWorkout.mockReturnValueOnce(addDeferred.promise);
+      const addWorkoutImpl = vi.fn().mockReturnValueOnce(addDeferred.promise);
 
-      const { result } = renderUseWorkout();
+      const { result, addWorkout } = renderUseWorkout({
+        addWorkout: addWorkoutImpl,
+      });
       const logArg = {
         workout: {
           weekNumber: 1,
@@ -489,7 +592,7 @@ describe("useWorkout", () => {
       const firstCall = result.current.handleFinishWorkout(logArg);
       const secondCall = result.current.handleFinishWorkout(logArg);
 
-      expect(firestoreServiceMock.addWorkout).toHaveBeenCalledTimes(1);
+      expect(addWorkout).toHaveBeenCalledTimes(1);
       await expect(secondCall).resolves.toBeNull();
 
       addDeferred.resolve({
@@ -519,7 +622,8 @@ describe("useWorkout", () => {
         })
       );
 
-      firestoreServiceMock.addWorkout
+      const addWorkoutImpl = vi
+        .fn()
         .mockRejectedValueOnce(new Error("Network error"))
         .mockResolvedValueOnce({
           id: "w-retry",
@@ -532,8 +636,8 @@ describe("useWorkout", () => {
           completedAt: "2026-11-23T11:00:00.000Z",
         });
 
-      const { result, setUserData, setActiveWorkout, setView, getUserData } =
-        renderUseWorkout();
+      const { result, setActiveWorkout, setView, getUserData } =
+        renderUseWorkout({ addWorkout: addWorkoutImpl });
       const logArg = {
         workout: {
           weekNumber: 1,
@@ -550,7 +654,7 @@ describe("useWorkout", () => {
       ).rejects.toThrow("Network error");
 
       expect(localStorage.getItem(ACTIVE_KEY)).not.toBeNull();
-      expect(setUserData).not.toHaveBeenCalled();
+      expect(getUserData().history).toHaveLength(0);
       expect(setActiveWorkout).not.toHaveBeenCalled();
       expect(setView).not.toHaveBeenCalled();
 

@@ -17,18 +17,8 @@ const authServiceMock = vi.hoisted(() => ({
   deleteAccount: vi.fn(),
 }));
 
-const firestoreServiceMock = vi.hoisted(() => ({
-  clearUserData: vi.fn(),
-  resetUserProgram: vi.fn(),
-  deleteUserData: vi.fn(),
-}));
-
 vi.mock("../../services/firebase/authServices", () => ({
   authService: authServiceMock,
-}));
-
-vi.mock("../../services/firebase/firestoreServices", () => ({
-  firestoreService: firestoreServiceMock,
 }));
 
 vi.mock("../../services/api/emailService", () => ({
@@ -63,6 +53,7 @@ function createContextValue(overrides = {}) {
       history: [],
     },
     handleResetSystem: vi.fn().mockResolvedValue(undefined),
+    deleteAll: vi.fn().mockResolvedValue({ deletedWorkoutsCount: 0 }),
     clearStorage: vi.fn(),
     isSynced: true,
     syncError: null,
@@ -78,9 +69,6 @@ describe("ProfileScreen", () => {
     authServiceMock.logout.mockResolvedValue(undefined);
     authServiceMock.reauthenticate.mockResolvedValue(undefined);
     authServiceMock.deleteAccount.mockResolvedValue(undefined);
-    firestoreServiceMock.deleteUserData.mockResolvedValue({
-      deletedWorkoutsCount: 0,
-    });
   });
 
   afterEach(() => {
@@ -269,10 +257,24 @@ describe("ProfileScreen", () => {
   });
 
   describe("Delete Account modal integration", () => {
-    it("opens DeleteAccountModal with password re-auth and executes full deletion flow", async () => {
-      const clearStorage = vi.fn();
+    it("opens DeleteAccountModal with password re-auth and executes reauthenticate -> deleteAll -> deleteAccount -> clearStorage in order", async () => {
+      const callOrder = [];
+      const clearStorage = vi.fn(() => callOrder.push("clearStorage"));
+      const deleteAll = vi.fn(async () => {
+        callOrder.push("deleteAll");
+        return { deletedWorkoutsCount: 0 };
+      });
+      authServiceMock.reauthenticate.mockImplementationOnce(async () => {
+        callOrder.push("reauthenticate");
+      });
+      authServiceMock.deleteAccount.mockImplementationOnce(async () => {
+        callOrder.push("deleteAccount");
+      });
+
       render(
-        <AppContext.Provider value={createContextValue({ clearStorage })}>
+        <AppContext.Provider
+          value={createContextValue({ clearStorage, deleteAll })}
+        >
           <ProfileScreen />
         </AppContext.Provider>
       );
@@ -301,9 +303,15 @@ describe("ProfileScreen", () => {
         ).toBeNull();
       });
       expect(authServiceMock.reauthenticate).toHaveBeenCalledWith("my-secret");
-      expect(firestoreServiceMock.deleteUserData).toHaveBeenCalledWith("u-1");
+      expect(deleteAll).toHaveBeenCalledTimes(1);
       expect(authServiceMock.deleteAccount).toHaveBeenCalledTimes(1);
       expect(clearStorage).toHaveBeenCalledTimes(1);
+      expect(callOrder).toEqual([
+        "reauthenticate",
+        "deleteAll",
+        "deleteAccount",
+        "clearStorage",
+      ]);
     });
   });
 
@@ -312,6 +320,7 @@ describe("ProfileScreen", () => {
       const deferred = createDeferred();
       authServiceMock.logout.mockReturnValueOnce(deferred.promise);
       const clearStorage = vi.fn();
+      const deleteAll = vi.fn();
 
       localStorage.setItem("fitgen:active:v1", JSON.stringify({ weekNumber: 1 }));
       localStorage.setItem("fitgen-active", JSON.stringify({ legacy: true }));
@@ -319,7 +328,9 @@ describe("ProfileScreen", () => {
       localStorage.setItem("theme", "dark");
 
       render(
-        <AppContext.Provider value={createContextValue({ clearStorage })}>
+        <AppContext.Provider
+          value={createContextValue({ clearStorage, deleteAll })}
+        >
           <ProfileScreen />
         </AppContext.Provider>
       );
@@ -345,8 +356,7 @@ describe("ProfileScreen", () => {
       expect(localStorage.getItem("fitgen-active-w1-d1")).toBeNull();
       expect(localStorage.getItem("theme")).toBe("dark");
       expect(clearStorage).toHaveBeenCalledTimes(1);
-      expect(firestoreServiceMock.deleteUserData).not.toHaveBeenCalled();
-      expect(firestoreServiceMock.resetUserProgram).not.toHaveBeenCalled();
+      expect(deleteAll).not.toHaveBeenCalled();
       expect(authServiceMock.deleteAccount).not.toHaveBeenCalled();
     });
 

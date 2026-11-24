@@ -21,12 +21,17 @@ export default function ProfileScreen() {
     handleResetSystem: onResetSystem,
     user,
     clearStorage,
+    deleteAll,
     isSynced = true,
     syncError = null,
     retrySync,
   } = useAppContext();
   const profile = userData.profile;
-  const { handleLogout, handleDeleteAccount } = useAuth({ user, clearStorage });
+  const { handleLogout, handleDeleteAccount } = useAuth({
+    user,
+    clearStorage,
+    deleteAll,
+  });
   const [activeModal, setActiveModal] = useState(null); // 'reset' | 'report' | 'delete-account' | null
   const [reportReason, setReportReason] = useState("");
   const [isResetting, setIsResetting] = useState(false);

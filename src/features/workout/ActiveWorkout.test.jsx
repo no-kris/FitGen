@@ -11,19 +11,6 @@ import {
 } from "@testing-library/react";
 import { AppContext } from "../../context/AppContext";
 
-const firestoreServiceMock = vi.hoisted(() => ({
-  addWorkout: vi.fn(),
-  saveUserData: vi.fn(),
-  getWorkouts: vi.fn(),
-  getUserData: vi.fn(),
-  migrateLegacyHistory: vi.fn(),
-  clearUserData: vi.fn(),
-}));
-
-vi.mock("../../services/firebase/firestoreServices", () => ({
-  firestoreService: firestoreServiceMock,
-}));
-
 vi.mock("@capacitor/haptics", () => ({
   Haptics: { vibrate: vi.fn() },
 }));
@@ -72,9 +59,14 @@ function renderActiveWorkout(overrides = {}) {
     plan: { programName: "PPL", totalWeeks: 4, weeks: [] },
     history: [],
   };
-  const setUserData = vi.fn((updater) => {
-    userDataState =
-      typeof updater === "function" ? updater(userDataState) : updater;
+  const addWorkoutImpl = overrides.addWorkout ?? vi.fn();
+  const addWorkout = vi.fn(async (payload) => {
+    const savedEntry = await addWorkoutImpl(payload);
+    userDataState = {
+      ...userDataState,
+      history: [...userDataState.history, savedEntry],
+    };
+    return savedEntry;
   });
   const setView = vi.fn();
   const setActiveWorkout = vi.fn();
@@ -85,7 +77,7 @@ function renderActiveWorkout(overrides = {}) {
     syncError: null,
     activeWorkout: overrides.activeWorkout ?? makeWorkoutDay(),
     userData: userDataState,
-    setUserData,
+    addWorkout,
     setView,
     setActiveWorkout,
   };
@@ -98,7 +90,7 @@ function renderActiveWorkout(overrides = {}) {
 
   return {
     ...utils,
-    setUserData,
+    addWorkout,
     setView,
     setActiveWorkout,
     getUserData: () => userDataState,
@@ -118,9 +110,10 @@ describe("ActiveWorkout", () => {
 
   it("disables Finish with aria-busy and spinner while saving, then clears storage and navigates on resolve", async () => {
     const saveDeferred = createDeferred();
-    firestoreServiceMock.addWorkout.mockReturnValueOnce(saveDeferred.promise);
+    const addWorkoutImpl = vi.fn().mockReturnValueOnce(saveDeferred.promise);
 
-    const { setView, setActiveWorkout, getUserData } = renderActiveWorkout();
+    const { addWorkout, setView, setActiveWorkout, getUserData } =
+      renderActiveWorkout({ addWorkout: addWorkoutImpl });
 
     const exitBtn = screen.getByRole("button", { name: /exit workout/i });
     expect(exitBtn.disabled).toBe(false);
@@ -143,6 +136,7 @@ describe("ActiveWorkout", () => {
       expect(savingBtn.querySelector("svg")).not.toBeNull();
     });
 
+    expect(addWorkout).toHaveBeenCalledTimes(1);
     expect(exitBtn.disabled).toBe(true);
     expect(setView).not.toHaveBeenCalled();
     expect(setActiveWorkout).not.toHaveBeenCalled();
@@ -174,9 +168,9 @@ describe("ActiveWorkout", () => {
 
   it("ignores rapid double-tap on Finish so addWorkout is called only once", async () => {
     const saveDeferred = createDeferred();
-    firestoreServiceMock.addWorkout.mockReturnValueOnce(saveDeferred.promise);
+    const addWorkoutImpl = vi.fn().mockReturnValueOnce(saveDeferred.promise);
 
-    renderActiveWorkout();
+    const { addWorkout } = renderActiveWorkout({ addWorkout: addWorkoutImpl });
 
     fireEvent.click(screen.getByRole("button", { name: /^finish$/i }));
     const dialog = screen.getByRole("dialog");
@@ -188,7 +182,7 @@ describe("ActiveWorkout", () => {
     fireEvent.click(confirmFinishBtn);
     fireEvent.click(confirmFinishBtn);
 
-    expect(firestoreServiceMock.addWorkout).toHaveBeenCalledTimes(1);
+    expect(addWorkout).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       saveDeferred.resolve({
@@ -206,7 +200,8 @@ describe("ActiveWorkout", () => {
   });
 
   it("keeps workout intact and displays role=alert with Retry on failure, succeeding when retried", async () => {
-    firestoreServiceMock.addWorkout
+    const addWorkoutImpl = vi
+      .fn()
       .mockRejectedValueOnce(new Error("Offline write failed"))
       .mockResolvedValueOnce({
         id: "workout-retried",
@@ -219,7 +214,8 @@ describe("ActiveWorkout", () => {
         completedAt: "2026-11-23T10:05:00.000Z",
       });
 
-    const { setView, setActiveWorkout, getUserData } = renderActiveWorkout();
+    const { addWorkout, setView, setActiveWorkout, getUserData } =
+      renderActiveWorkout({ addWorkout: addWorkoutImpl });
 
     expect(localStorage.getItem(ACTIVE_KEY)).not.toBeNull();
 
@@ -243,7 +239,7 @@ describe("ActiveWorkout", () => {
       expect(setView).toHaveBeenCalledWith("logs");
     });
 
-    expect(firestoreServiceMock.addWorkout).toHaveBeenCalledTimes(2);
+    expect(addWorkout).toHaveBeenCalledTimes(2);
     expect(setActiveWorkout).toHaveBeenCalledWith(null);
     expect(getUserData().history).toHaveLength(1);
     expect(localStorage.getItem(ACTIVE_KEY)).toBeNull();
@@ -251,7 +247,7 @@ describe("ActiveWorkout", () => {
 
   it("does not re-save paused workout on timer tick after a successful finish", async () => {
     vi.useFakeTimers();
-    firestoreServiceMock.addWorkout.mockResolvedValueOnce({
+    const addWorkoutImpl = vi.fn().mockResolvedValueOnce({
       id: "workout-clean",
       weekNumber: 1,
       dayNumber: 1,
@@ -262,7 +258,7 @@ describe("ActiveWorkout", () => {
       completedAt: "2026-11-23T10:10:00.000Z",
     });
 
-    renderActiveWorkout();
+    renderActiveWorkout({ addWorkout: addWorkoutImpl });
 
     fireEvent.click(screen.getByRole("button", { name: /^finish$/i }));
     const dialog = screen.getByRole("dialog");
