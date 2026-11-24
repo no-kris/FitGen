@@ -54,13 +54,14 @@ These apply to the agent the user talks to directly, not to subagents.
   subagent and let it run the designers, `implementer`, `styler`, `tester`, `verifier`, and
   `reviewer`, and request approval before committing. Handle only small,
   single-file changes yourself.
-- For delegated work, read nothing: the orchestrator's messages carry the spec at the
-  approval gate and the verdict at the end. Do not read `REFACTOR_PLAN.md`, product
-  code, agent files, or run artifacts; the orchestrator and its workers own that
+- For delegated work, read nothing: the orchestrator's messages carry the approval
+  request at the approval gate and the verdict at the end. Do not read `REFACTOR_PLAN.md`,
+  product code, agent files, or run artifacts; the orchestrator and its workers own that
   context.
-- When the orchestrator returns `needs-approval`, relay its message (the spec text and
-  its path) to the user and end your turn. Do not resume it and do not make the change
-  yourself until the user replies with `APPROVED: <spec path>`.
+- When the orchestrator returns `needs-approval`, share the spec path (as a clickable
+  link) and a brief summary with the user — do not output or paste the full contents of
+  `spec.md` — and end your turn. Do not resume it and do not make the change yourself
+  until the user replies with `APPROVED: <spec path>`.
 - If you are already the orchestrator, delegate directly; never launch another
   orchestrator.
 
