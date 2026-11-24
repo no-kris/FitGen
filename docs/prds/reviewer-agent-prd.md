@@ -7,7 +7,7 @@
 - `orchestrator` invokes `reviewer` at Stage 10 after `verifier` writes `verification.md` and Stage 9 (Green Gate) passes—and again after each retry build round (Stages 7–9).
 
 **Branches**
-- If `spec.md`, `red-proof.md`, or `verification.md` is missing, or the working tree diff cannot be inspected, stop with `status: blocked` and report what is missing.
+- If `spec.md`, `red-proof.md`, or `verification.md` is missing, or the working tree diff cannot be inspected, stop with `status: blocked` and report what is missing or blocked.
 - If any changed line violates `.memory/knowledge/coding-standards.md`, `.memory/knowledge/design-system.md` (for UI/CSS changes), or `spec.md` contracts, or introduces regressions or out-of-scope edits, write `REJECT` in `review.md` with exact `file:line` findings and concrete fixes.
 - If a violation exists only in untouched legacy lines listed under "Known debt (do not expand)" in `coding-standards.md`, do not reject for it—note it only as a non-blocking observation if helpful.
 - If findings belong to both logic (`implementer`) and CSS (`styler`), tag each finding with its owning role so `orchestrator` routes Stage 11 cleanly.

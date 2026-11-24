@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-11-18
+updated: 2026-11-24
 source: observed
 ---
 
@@ -24,7 +24,7 @@ A change is done when all of these hold:
 
 React 19 + Vite 7 in plain JavaScript (`.js` / `.jsx`, no TypeScript). Firebase 12
 (auth + Firestore), Capacitor 8 (mobile), `lucide-react` (icons), EmailJS. Vercel
-edge functions in `api/`. No router, no Tailwind, no path aliases, no test runner yet.
+edge functions in `api/`. Vitest + React Testing Library for tests. No router, no Tailwind, no path aliases.
 
 ## Layout
 
@@ -50,7 +50,7 @@ function that consumes plan data.
 
 - Field names are canonical: `duration`, `selectedDays`, `weeks`, `exclusions`,
   `priorities`, `weeks[].schedule[].exercises`. No aliases or synonyms - a
-  `sessionDuration` field is how the week-2 generator already loses its input.
+  `sessionDuration` alias was how the week-2 generator previously lost its input.
 - The model's JSON schema lives once in `src/utils/planSchema.js` and is used by both
   prompt builders. Prompts MUST NOT redeclare the shape inline.
 - Model output is untrusted input: run `validatePlan()` before it reaches state.
@@ -67,7 +67,7 @@ function that consumes plan data.
 - Utils: `const thing = ...; export default thing;`.
 - Props destructured in the signature.
 - Handlers are `handleX` inside a component; the prop receiving them is `onX`.
-- Booleans read as predicates: `isGuest`, `hasPlan`, `isGenerating`.
+- Booleans read as predicates: `isSynced`, `hasPlan`, `isGenerating`.
 - No magic strings: use the `VIEWS`, `STORAGE_KEYS`, and `COLLECTIONS` constants.
 
 ## Formatting
@@ -97,7 +97,7 @@ function that consumes plan data.
 - Screens read context and call handlers. Shape surgery on `userData` belongs in a
   hook or in `App.jsx`, never in a leaf component.
 - Register screens in one place; do not add another `view ===` branch.
-- Guard Firestore writes on `user` (guests have no document), and `await` or
+- Guard Firestore writes on `user` (authenticated non-anonymous user required), and `await` or
   `.catch()` every new write so failures surface.
 - `localStorage` mirrors the cloud; it is not a second source of truth, and it is
   reachable only through the storage service.

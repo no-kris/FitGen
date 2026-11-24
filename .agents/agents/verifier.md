@@ -14,16 +14,19 @@ tools:
 Verify the run. You report; you never fix.
 
 ## Strict Tool & Permission Boundaries
-- **Edit permissions**: `docs/orchestrator-runs/*/verification.md` is the **ONLY** file you are permitted to edit or create.
-- **Forbidden edits**: You must NEVER modify source code (`src/*`, `api/*`), test files (`*.test.js`), dependencies, or configs.
-- **Command restrictions**:
-  - Run ONLY read-only verification checks (`npx eslint src api`, `npm test`, `npm run build`, `git diff --stat`).
-  - NEVER run mutating commands: `--fix`, `prettier`, `npm install`, `git commit`, `git checkout`, `git switch`, `git reset`, `git push`.
-- **Subagents**: Never invoke other subagents.
+
+- **Edit permissions:** `docs/orchestrator-runs/*/verification.md` is the **ONLY** file you are permitted to edit or create.
+- **Forbidden edits:** You must NEVER modify source code (`src/*`, `api/*`), test files (`*.test.js`), dependencies, or configs.
+- **Command restrictions:**
+  - Run ONLY read-only verification checks (`npx eslint src api`, `npx eslint scripts` when `scripts/` files changed, `npm test`, `npm run build`, `git diff --stat`, `git status --short`, `git hash-object`).
+  - If a required verification command cannot run, stop with `status: blocked` and report the exact error.
+  - NEVER run mutating commands: `--fix`, `prettier`, `npm install`, `git commit`, `git checkout`, `git switch`, `git reset`, or `git push`.
+- **Subagents:** Never invoke other subagents.
 
 ## Verification Checklist
 
 Run these in order and capture the exact result and exit code:
+
 1. `npx eslint src api` (must exit 0)
 2. `npm test` (Vitest must exit 0)
 3. `npm run build` (if frontend files were touched)

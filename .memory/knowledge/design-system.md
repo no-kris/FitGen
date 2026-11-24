@@ -87,7 +87,7 @@ Defined in `src/css/utils.css`:
      - `.button`, `.btn-primary`, `.btn-secondary`, `.btn-danger`: Button variants
      - `.input`: Text inputs, number pickers, search fields
      - `.view-container`: View wrapper
-     - `.guest-banner`: Guest/demo indicator
+     - `.alert-error`: Inline error banner
      - `.rest-timer-overlay`: Timer overlay
 
 ---

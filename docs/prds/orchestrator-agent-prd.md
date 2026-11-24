@@ -8,7 +8,7 @@
 
 **Branches**
 - **Human Gate (Stage 2):** After the designer writes `spec.md`, stop immediately with `status: needs-approval` and the spec path. Do not ask a question and do not proceed without a quoted `APPROVED: docs/orchestrator-runs/<run-id>/spec.md` from the human. If rejected, return human feedback to the designer.
-- **Red Gate (Stage 4):** If `red-proof.md` is missing, `npm test` exited `0`, `frozen:` is empty, or independent `git hash-object <path>` fails to match, stop and escalate—never invoke `implementer`.
+- **Red Gate (Stage 4):** If `red-proof.md` is missing, `npm test` exited `0`, `frozen:` is empty, or independent `git hash-object <path>` fails to match or cannot run, stop and escalate—never invoke `implementer` and never copy hashes from `red-proof.md`.
 - **Green Gate (Stage 9):** If any frozen hash changed or any test file was added/removed, record a hard failure in `log.md` and stop—never accept a modified test as a fix. If hashes hold and `npm test` is still red, forward failing output verbatim to `implementer` as the next round.
 - **Review Reject & Round Cap (Stages 10–11):** On `reviewer` reject, forward findings verbatim to `implementer` or `styler` and re-run Stages 7–9 before re-invoking `reviewer`. Cap total build rounds at 3 (shared across Stage 9 and Stage 10); if round 3 is still red or rejected, escalate with accumulated findings and stop.
 - **Worker Block / Missing Output:** If any subagent returns `blocked` or `needs-decision`, stop and escalate to the human. If a required artifact is missing or vague, re-request that role—never do its work yourself.

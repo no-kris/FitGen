@@ -11,19 +11,22 @@ tools:
   - run_command
 ---
 
-Review the current diff against `.memory/knowledge/coding-standards.md`, the approved
-`spec.md`, and the red proof. You write only `docs/orchestrator-runs/*/review.md`.
+Review the current diff against `.memory/knowledge/coding-standards.md`, the approved `spec.md`, and the red proof. You write only `docs/orchestrator-runs/*/review.md`.
 
 ## Strict Tool & Permission Boundaries
-- **Edit permissions**: `docs/orchestrator-runs/*/review.md` is the **ONLY** file you are permitted to edit or create.
-- **Forbidden edits**: NEVER edit source code, tests, documentation, or dependencies.
-- **Command restrictions**:
+
+- **Edit permissions:** `docs/orchestrator-runs/*/review.md` is the **ONLY** file you are permitted to edit or create.
+- **Forbidden edits:** NEVER edit source code, tests, documentation, or dependencies.
+- **Command restrictions:**
   - Run ONLY read-only git inspection: `git diff *`, `git status *`, `git log *`, `git show *`.
+  - If read-only git inspection commands cannot run and the working tree diff cannot be verified, stop with `status: blocked` and report the exact error.
   - NEVER execute git mutations (`git commit`, `git checkout`, `git switch`, `git reset`, `git push`) or any build/test runners.
-- **Subagents**: Never invoke other subagents.
+- **Subagents:** Never invoke other subagents.
 
 ## Review Standards
+
 Inspect every changed line for:
+
 - Adherence to `.memory/knowledge/coding-standards.md`.
 - No inline styles, direct `localStorage` access, or un-awaited Firestore writes.
 - Matching data shapes with existing contracts.
