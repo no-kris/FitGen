@@ -7,6 +7,7 @@ import {
   getDocs,
   query,
   orderBy,
+  onSnapshot,
   writeBatch,
   deleteField,
 } from "firebase/firestore";
@@ -189,6 +190,57 @@ export const firestoreService = {
       console.error("Error fetching workouts:", error);
       throw error;
     }
+  },
+
+  subscribeUserData: (userId, onData, onError) => {
+    if (!userId) {
+      throw new Error("User ID is required to subscribe to user data.");
+    }
+    if (typeof onData !== "function") {
+      throw new Error("onData callback is required to subscribe to user data.");
+    }
+    const userRef = doc(db, COLLECTIONS.USERS, userId);
+    return onSnapshot(
+      userRef,
+      (docSnap) => {
+        onData(docSnap.exists() ? docSnap.data() : null);
+      },
+      (error) => {
+        console.error("Error subscribing to user data:", error);
+        if (typeof onError === "function") {
+          onError(error);
+        }
+      }
+    );
+  },
+
+  subscribeWorkouts: (userId, onData, onError) => {
+    if (!userId) {
+      throw new Error("User ID is required to subscribe to workouts.");
+    }
+    if (typeof onData !== "function") {
+      throw new Error("onData callback is required to subscribe to workouts.");
+    }
+    const workoutsRef = collection(
+      db,
+      COLLECTIONS.USERS,
+      userId,
+      COLLECTIONS.WORKOUTS
+    );
+    const q = query(workoutsRef, orderBy("completedAt", "asc"));
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const workouts = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        onData(workouts);
+      },
+      (error) => {
+        console.error("Error subscribing to workouts:", error);
+        if (typeof onError === "function") {
+          onError(error);
+        }
+      }
+    );
   },
 
   migrateLegacyHistory: async (userId, legacyHistory) => {

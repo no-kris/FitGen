@@ -22,6 +22,8 @@ const firestoreServiceMock = vi.hoisted(() => ({
   clearUserData: vi.fn(),
   resetUserProgram: vi.fn(),
   deleteUserData: vi.fn(),
+  subscribeUserData: vi.fn(),
+  subscribeWorkouts: vi.fn(),
 }));
 
 const contextStore = vi.hoisted(() => ({
@@ -107,12 +109,113 @@ function createDeferred() {
   return { promise, resolve, reject };
 }
 
+function createSubscriptionHarness() {
+  const userSubs = [];
+  const workoutSubs = [];
+
+  firestoreServiceMock.subscribeUserData.mockImplementation(
+    (uid, onData, onError) => {
+      const sub = {
+        uid,
+        onData,
+        onError,
+        unsub: vi.fn(),
+        emit: (data) => {
+          act(() => {
+            onData(data);
+          });
+        },
+        emitError: (err) => {
+          act(() => {
+            onError?.(err);
+          });
+        },
+      };
+      userSubs.push(sub);
+      return sub.unsub;
+    }
+  );
+
+  firestoreServiceMock.subscribeWorkouts.mockImplementation(
+    (uid, onData, onError) => {
+      const sub = {
+        uid,
+        onData,
+        onError,
+        unsub: vi.fn(),
+        emit: (workouts) => {
+          act(() => {
+            onData(workouts);
+          });
+        },
+        emitError: (err) => {
+          act(() => {
+            onError?.(err);
+          });
+        },
+      };
+      workoutSubs.push(sub);
+      return sub.unsub;
+    }
+  );
+
+  return {
+    userSubs,
+    workoutSubs,
+    latestUserSub: () => {
+      expect(userSubs.length).toBeGreaterThan(0);
+      return userSubs[userSubs.length - 1];
+    },
+    latestWorkoutsSub: () => {
+      expect(workoutSubs.length).toBeGreaterThan(0);
+      return workoutSubs[workoutSubs.length - 1];
+    },
+    emitUser: (data) => {
+      expect(userSubs.length).toBeGreaterThan(0);
+      act(() => {
+        userSubs[userSubs.length - 1].onData(data);
+      });
+    },
+    emitUserError: (err) => {
+      expect(userSubs.length).toBeGreaterThan(0);
+      act(() => {
+        userSubs[userSubs.length - 1].onError?.(err);
+      });
+    },
+    emitWorkouts: (workouts) => {
+      expect(workoutSubs.length).toBeGreaterThan(0);
+      act(() => {
+        workoutSubs[workoutSubs.length - 1].onData(workouts);
+      });
+    },
+    emitWorkoutsError: (err) => {
+      expect(workoutSubs.length).toBeGreaterThan(0);
+      act(() => {
+        workoutSubs[workoutSubs.length - 1].onError?.(err);
+      });
+    },
+    emitInitial: (userData, workouts = []) => {
+      expect(userSubs.length).toBeGreaterThan(0);
+      act(() => {
+        userSubs[userSubs.length - 1].onData(userData);
+      });
+      expect(workoutSubs.length).toBeGreaterThan(0);
+      act(() => {
+        workoutSubs[workoutSubs.length - 1].onData(workouts);
+      });
+    },
+  };
+}
+
 describe("App handleSavePlan, handleResetSystem, and sync guards", () => {
+  let subs;
+
   beforeEach(() => {
     localStorage.clear();
     vi.resetAllMocks();
     authCallbacks.listener = null;
     contextStore.value = null;
+    subs = createSubscriptionHarness();
     authMocks.subscribeToAuthChanges.mockImplementation((cb) => {
       authCallbacks.listener = cb;
       return vi.fn();
@@ -124,16 +227,13 @@ describe("App handleSavePlan, handleResetSystem, and sync guards", () => {
   });
 
   it("blocks handleSavePlan while user is signed in and isSynced is false (pending), with zero Firestore writes", async () => {
-    const userDeferred = createDeferred();
-    firestoreServiceMock.getUserData.mockReturnValueOnce(userDeferred.promise);
-    firestoreServiceMock.getWorkouts.mockResolvedValueOnce([]);
-
     render(<App />);
 
     await act(async () => {
       authCallbacks.listener({ uid: "user-1", isAnonymous: false });
     });
 
+    expect(firestoreServiceMock.subscribeUserData).toHaveBeenCalledTimes(1);
     expect(contextStore.value.status).toBe("loading");
     expect(contextStore.value.isSynced).toBe(false);
     expect(contextStore.value.syncError).toBeNull();
@@ -157,9 +257,6 @@ describe("App handleSavePlan, handleResetSystem, and sync guards", () => {
     const consoleErrorSpy = vi
       .spyOn(console, "error")
       .mockImplementation(() => {});
-    firestoreServiceMock.getUserData.mockRejectedValueOnce(
-      new Error("Firestore offline")
-    );
 
     try {
       render(<App />);
@@ -168,10 +265,10 @@ describe("App handleSavePlan, handleResetSystem, and sync guards", () => {
         authCallbacks.listener({ uid: "user-sync-err", isAnonymous: false });
       });
 
-      await waitFor(() => {
-        expect(contextStore.value.status).toBe("error");
-        expect(contextStore.value.syncError).toBeInstanceOf(Error);
-      });
+      subs.emitUserError(new Error("Firestore offline"));
+
+      expect(contextStore.value.status).toBe("error");
+      expect(contextStore.value.syncError).toBeInstanceOf(Error);
       expect(contextStore.value.error).toBe(contextStore.value.syncError);
       expect(contextStore.value.isSynced).toBe(false);
 
@@ -202,16 +299,13 @@ describe("App handleSavePlan, handleResetSystem, and sync guards", () => {
   });
 
   it("blocks handleResetSystem while sync is pending with zero Firestore writes", async () => {
-    const userDeferred = createDeferred();
-    firestoreServiceMock.getUserData.mockReturnValueOnce(userDeferred.promise);
-    firestoreServiceMock.getWorkouts.mockResolvedValueOnce([]);
-
     render(<App />);
 
     await act(async () => {
       authCallbacks.listener({ uid: "user-pending-reset", isAnonymous: false });
     });
 
+    expect(firestoreServiceMock.subscribeUserData).toHaveBeenCalledTimes(1);
     expect(contextStore.value.status).toBe("loading");
     expect(contextStore.value.isSynced).toBe(false);
     expect(contextStore.value.syncError).toBeNull();
@@ -228,18 +322,15 @@ describe("App handleSavePlan, handleResetSystem, and sync guards", () => {
   });
 
   it("awaits saveUserData in handleSavePlan once synced and leaves view unchanged on write failure", async () => {
-    firestoreServiceMock.getUserData.mockResolvedValueOnce(null);
-    firestoreServiceMock.getWorkouts.mockResolvedValueOnce([]);
-
     render(<App />);
 
     await act(async () => {
       authCallbacks.listener({ uid: "user-2", isAnonymous: false });
     });
 
-    await waitFor(() => {
-      expect(contextStore.value.isSynced).toBe(true);
-    });
+    subs.emitInitial(null, []);
+
+    expect(contextStore.value.isSynced).toBe(true);
 
     firestoreServiceMock.saveUserData.mockRejectedValueOnce(
       new Error("Firestore write failed")
@@ -281,19 +372,16 @@ describe("App handleSavePlan, handleResetSystem, and sync guards", () => {
   });
 
   it("handleSavePlan shows optimistic plan/profile while pinning Profile Setup View until resolve, and rolls back cleanly on reject", async () => {
-    firestoreServiceMock.getUserData.mockResolvedValueOnce(null);
-    firestoreServiceMock.getWorkouts.mockResolvedValueOnce([]);
-
     render(<App />);
 
     await act(async () => {
       authCallbacks.listener({ uid: "user-opt-save", isAnonymous: false });
     });
 
-    await waitFor(() => {
-      expect(contextStore.value.isSynced).toBe(true);
-      expect(contextStore.value.view).toBe("profile");
-    });
+    subs.emitInitial(null, []);
+
+    expect(contextStore.value.isSynced).toBe(true);
+    expect(contextStore.value.view).toBe("profile");
 
     expect(screen.getByText("Profile Setup View")).toBeTruthy();
     expect(screen.queryByText("Profile View")).toBeNull();
@@ -376,11 +464,6 @@ describe("App handleSavePlan, handleResetSystem, and sync guards", () => {
         completedAt: "2026-11-20T10:00:00.000Z",
       },
     ];
-    firestoreServiceMock.getUserData.mockResolvedValueOnce({
-      plan: existingPlan,
-      profile: existingProfile,
-    });
-    firestoreServiceMock.getWorkouts.mockResolvedValueOnce(existingHistory);
 
     localStorage.setItem("fitgen:active:v1", JSON.stringify({ weekNumber: 1 }));
 
@@ -390,10 +473,13 @@ describe("App handleSavePlan, handleResetSystem, and sync guards", () => {
       authCallbacks.listener({ uid: "user-opt-reset", isAnonymous: false });
     });
 
-    await waitFor(() => {
-      expect(contextStore.value.isSynced).toBe(true);
-      expect(contextStore.value.view).toBe("plan");
-    });
+    subs.emitInitial(
+      { plan: existingPlan, profile: existingProfile },
+      existingHistory
+    );
+
+    expect(contextStore.value.isSynced).toBe(true);
+    expect(contextStore.value.view).toBe("plan");
 
     const active = { dayName: "Monday", weekNumber: 1 };
     act(() => {
@@ -477,11 +563,6 @@ describe("App handleSavePlan, handleResetSystem, and sync guards", () => {
       { id: "w-1", weekNumber: 1, dayNumber: 1, dayName: "Monday", focus: "Push", logs: [], duration: 1800, completedAt: "2026-11-20T10:00:00.000Z" },
       { id: "w-2", weekNumber: 1, dayNumber: 2, dayName: "Wednesday", focus: "Pull", logs: [], duration: 1500, completedAt: "2026-11-22T10:00:00.000Z" },
     ];
-    firestoreServiceMock.getUserData.mockResolvedValueOnce({
-      plan: { programName: "PPL", weeks: [] },
-      profile: { goal: "Build Muscle" },
-    });
-    firestoreServiceMock.getWorkouts.mockResolvedValueOnce(existingHistory);
     firestoreServiceMock.resetUserProgram.mockResolvedValueOnce(undefined);
 
     localStorage.setItem("fitgen:active:v1", JSON.stringify({ weekNumber: 1 }));
@@ -495,10 +576,16 @@ describe("App handleSavePlan, handleResetSystem, and sync guards", () => {
       authCallbacks.listener({ uid: "user-reset-ok", isAnonymous: false });
     });
 
-    await waitFor(() => {
-      expect(contextStore.value.isSynced).toBe(true);
-      expect(contextStore.value.view).toBe("plan");
-    });
+    subs.emitInitial(
+      {
+        plan: { programName: "PPL", weeks: [] },
+        profile: { goal: "Build Muscle" },
+      },
+      existingHistory
+    );
+
+    expect(contextStore.value.isSynced).toBe(true);
+    expect(contextStore.value.view).toBe("plan");
 
     act(() => {
       contextStore.value.setActiveWorkout({ dayName: "Monday", weekNumber: 1 });
@@ -538,11 +625,6 @@ describe("App handleSavePlan, handleResetSystem, and sync guards", () => {
     const existingPlan = { programName: "PPL", weeks: [] };
     const existingProfile = { goal: "Build Muscle" };
 
-    firestoreServiceMock.getUserData.mockResolvedValueOnce({
-      plan: existingPlan,
-      profile: existingProfile,
-    });
-    firestoreServiceMock.getWorkouts.mockResolvedValueOnce(existingHistory);
     firestoreServiceMock.resetUserProgram.mockRejectedValueOnce(
       new Error("Reset failed on server")
     );
@@ -555,10 +637,13 @@ describe("App handleSavePlan, handleResetSystem, and sync guards", () => {
       authCallbacks.listener({ uid: "user-reset-fail", isAnonymous: false });
     });
 
-    await waitFor(() => {
-      expect(contextStore.value.isSynced).toBe(true);
-      expect(contextStore.value.view).toBe("plan");
-    });
+    subs.emitInitial(
+      { plan: existingPlan, profile: existingProfile },
+      existingHistory
+    );
+
+    expect(contextStore.value.isSynced).toBe(true);
+    expect(contextStore.value.view).toBe("plan");
 
     const active = { dayName: "Monday", weekNumber: 1 };
     act(() => {
@@ -633,7 +718,6 @@ describe("App handleSavePlan, handleResetSystem, and sync guards", () => {
       .spyOn(console, "error")
       .mockImplementation(() => {});
     const initialErr = new Error("Initial sync timeout");
-    firestoreServiceMock.getUserData.mockRejectedValueOnce(initialErr);
 
     try {
       render(<App />);
@@ -644,19 +728,11 @@ describe("App handleSavePlan, handleResetSystem, and sync guards", () => {
         authCallbacks.listener({ uid: "user-e2e", isAnonymous: false });
       });
 
-      await waitFor(() => {
-        expect(contextStore.value.status).toBe("error");
-      });
+      subs.emitUserError(initialErr);
+
+      expect(contextStore.value.status).toBe("error");
       expect(contextStore.value.error).toBe(initialErr);
       expect(contextStore.value.syncError).toBe(initialErr);
-
-      const retryUserDeferred = createDeferred();
-      firestoreServiceMock.getUserData.mockReturnValueOnce(
-        retryUserDeferred.promise
-      );
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce([
-        { id: "w-e2e", weekNumber: 1, dayNumber: 1, dayName: "Monday" },
-      ]);
 
       act(() => {
         contextStore.value.retrySync();
@@ -666,18 +742,16 @@ describe("App handleSavePlan, handleResetSystem, and sync guards", () => {
       expect(contextStore.value.error).toBeNull();
       expect(contextStore.value.syncError).toBeNull();
 
-      await act(async () => {
-        retryUserDeferred.resolve({
+      subs.emitInitial(
+        {
           plan: { programName: "E2E Plan", weeks: [] },
           profile: { goal: "strength" },
-        });
-        await Promise.resolve();
-      });
+        },
+        [{ id: "w-e2e", weekNumber: 1, dayNumber: 1, dayName: "Monday" }]
+      );
 
-      await waitFor(() => {
-        expect(contextStore.value.status).toBe("ready");
-        expect(contextStore.value.isSynced).toBe(true);
-      });
+      expect(contextStore.value.status).toBe("ready");
+      expect(contextStore.value.isSynced).toBe(true);
       expect(contextStore.value.plan.programName).toBe("E2E Plan");
       expect(contextStore.value.profile.goal).toBe("strength");
       expect(contextStore.value.workouts).toHaveLength(1);
@@ -712,14 +786,148 @@ describe("App handleSavePlan, handleResetSystem, and sync guards", () => {
       consoleErrorSpy.mockRestore();
     }
   });
+
+  it("propagates live multi-device users/{uid} and workouts snapshots through AppContext without resetting view, surfaces mid-session listener errors, and recovers via retrySync", async () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const w1 = {
+      id: "w-1",
+      weekNumber: 1,
+      dayNumber: 1,
+      dayName: "Monday",
+      focus: "Push",
+      logs: [],
+      duration: 1200,
+      completedAt: "2026-11-20T10:00:00.000Z",
+    };
+    const w2 = {
+      id: "w-2",
+      weekNumber: 1,
+      dayNumber: 2,
+      dayName: "Wednesday",
+      focus: "Pull",
+      logs: [],
+      duration: 1500,
+      completedAt: "2026-11-22T10:00:00.000Z",
+    };
+    const w3 = {
+      id: "w-3",
+      weekNumber: 1,
+      dayNumber: 3,
+      dayName: "Friday",
+      focus: "Legs",
+      logs: [],
+      duration: 1800,
+      completedAt: "2026-11-24T10:00:00.000Z",
+    };
+
+    try {
+      render(<App />);
+
+      await act(async () => {
+        authCallbacks.listener({ uid: "user-live-app", isAnonymous: false });
+      });
+
+      subs.emitInitial(
+        {
+          plan: { programName: "Initial Plan", weeks: [] },
+          profile: { goal: "muscle" },
+        },
+        [w1]
+      );
+
+      expect(contextStore.value.status).toBe("ready");
+      expect(contextStore.value.isSynced).toBe(true);
+      expect(contextStore.value.view).toBe("plan");
+      expect(contextStore.value.plan.programName).toBe("Initial Plan");
+
+      // Navigate away from plan to logs; live updates must NOT reset view
+      act(() => {
+        contextStore.value.setView("logs");
+      });
+      expect(contextStore.value.view).toBe("logs");
+
+      // Live users/{uid} update from another device
+      const remotePlan = { programName: "Device B Plan", weeks: [{ weekNumber: 1 }] };
+      const remoteProfile = { goal: "strength" };
+      subs.emitUser({ plan: remotePlan, profile: remoteProfile });
+
+      expect(contextStore.value.plan).toEqual(remotePlan);
+      expect(contextStore.value.profile).toEqual(remoteProfile);
+      expect(contextStore.value.userData.plan).toEqual(remotePlan);
+      expect(contextStore.value.userData.profile).toEqual(remoteProfile);
+      expect(contextStore.value.workouts).toEqual([w1]);
+      expect(contextStore.value.view).toBe("logs");
+
+      // Live workouts update from another device
+      subs.emitWorkouts([w1, w2]);
+
+      expect(contextStore.value.workouts).toEqual([w1, w2]);
+      expect(contextStore.value.userData).toEqual({
+        profile: remoteProfile,
+        plan: remotePlan,
+        history: [w1, w2],
+      });
+      expect(contextStore.value.view).toBe("logs");
+
+      // Mid-session listener error surfaces status: "error" & syncError (never masked as loading)
+      const midErr = new Error("Listener disconnected");
+      subs.emitWorkoutsError(midErr);
+
+      expect(contextStore.value.status).toBe("error");
+      expect(contextStore.value.error).toBe(midErr);
+      expect(contextStore.value.syncError).toBe(midErr);
+      expect(contextStore.value.isSynced).toBe(false);
+      expect(contextStore.value.view).toBe("logs");
+      expect(contextStore.value.plan).toEqual(remotePlan);
+      expect(contextStore.value.workouts).toEqual([w1, w2]);
+
+      // retrySync() transitions to loading and recovers cleanly on fresh snapshots
+      act(() => {
+        contextStore.value.retrySync();
+      });
+
+      expect(contextStore.value.status).toBe("loading");
+      expect(contextStore.value.error).toBeNull();
+      expect(contextStore.value.syncError).toBeNull();
+      expect(contextStore.value.isSynced).toBe(false);
+
+      const recoveredPlan = { programName: "Recovered Live Plan", weeks: [] };
+      const recoveredProfile = { goal: "endurance" };
+      subs.emitInitial(
+        { plan: recoveredPlan, profile: recoveredProfile },
+        [w1, w2, w3]
+      );
+
+      expect(contextStore.value.status).toBe("ready");
+      expect(contextStore.value.isSynced).toBe(true);
+      expect(contextStore.value.error).toBeNull();
+      expect(contextStore.value.syncError).toBeNull();
+      expect(contextStore.value.plan).toEqual(recoveredPlan);
+      expect(contextStore.value.profile).toEqual(recoveredProfile);
+      expect(contextStore.value.workouts).toEqual([w1, w2, w3]);
+      expect(contextStore.value.userData).toEqual({
+        profile: recoveredProfile,
+        plan: recoveredPlan,
+        history: [w1, w2, w3],
+      });
+      expect(contextStore.value.view).toBe("logs");
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
 });
 
 describe("App auth context, logout hygiene, and anonymous sign-out", () => {
+  let subs;
+
   beforeEach(() => {
     localStorage.clear();
     vi.resetAllMocks();
     authCallbacks.listener = null;
     contextStore.value = null;
+    subs = createSubscriptionHarness();
     authMocks.logout.mockResolvedValue(undefined);
     authMocks.subscribeToAuthChanges.mockImplementation((cb) => {
       authCallbacks.listener = cb;
@@ -765,12 +973,6 @@ describe("App auth context, logout hygiene, and anonymous sign-out", () => {
   });
 
   it("clears userData, activeWorkout, all active workout localStorage keys, and sets view to welcome on null auth transition", async () => {
-    firestoreServiceMock.getUserData.mockResolvedValueOnce({
-      plan: { programName: "PPL", weeks: [] },
-      profile: { goal: "muscle" },
-    });
-    firestoreServiceMock.getWorkouts.mockResolvedValueOnce([{ id: "w-1" }]);
-
     localStorage.setItem("fitgen:active:v1", JSON.stringify({ weekNumber: 1 }));
     localStorage.setItem("fitgen-active", JSON.stringify({ legacy: true }));
     localStorage.setItem("fitgen-active-w2-d3", "{}");
@@ -782,10 +984,18 @@ describe("App auth context, logout hygiene, and anonymous sign-out", () => {
       authCallbacks.listener({ uid: "user-signed-in", isAnonymous: false });
     });
 
-    await waitFor(() => {
-      expect(contextStore.value.isSynced).toBe(true);
-      expect(contextStore.value.view).toBe("plan");
-    });
+    subs.emitInitial(
+      {
+        plan: { programName: "PPL", weeks: [] },
+        profile: { goal: "muscle" },
+      },
+      [{ id: "w-1" }]
+    );
+
+    expect(contextStore.value.isSynced).toBe(true);
+    expect(contextStore.value.view).toBe("plan");
+    const activeUserSub = subs.latestUserSub();
+    const activeWorkoutsSub = subs.latestWorkoutsSub();
 
     act(() => {
       contextStore.value.setActiveWorkout({ weekNumber: 1, dayName: "Monday" });
@@ -795,6 +1005,8 @@ describe("App auth context, logout hygiene, and anonymous sign-out", () => {
       authCallbacks.listener(null);
     });
 
+    expect(activeUserSub.unsub).toHaveBeenCalledTimes(1);
+    expect(activeWorkoutsSub.unsub).toHaveBeenCalledTimes(1);
     expect(contextStore.value.user).toBeNull();
     expect(contextStore.value.profile).toBeNull();
     expect(contextStore.value.plan).toBeNull();
@@ -834,6 +1046,8 @@ describe("App auth context, logout hygiene, and anonymous sign-out", () => {
     expect(localStorage.getItem("fitgen:active:v1")).toBeNull();
     expect(localStorage.getItem("fitgen-active")).toBeNull();
     expect(localStorage.getItem("fitgen-active-anon")).toBeNull();
+    expect(firestoreServiceMock.subscribeUserData).not.toHaveBeenCalled();
+    expect(firestoreServiceMock.subscribeWorkouts).not.toHaveBeenCalled();
     expect(firestoreServiceMock.getUserData).not.toHaveBeenCalled();
     expect(firestoreServiceMock.getWorkouts).not.toHaveBeenCalled();
   });

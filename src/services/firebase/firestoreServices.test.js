@@ -37,6 +37,7 @@ const firestoreMocks = vi.hoisted(() => ({
   deleteDoc: vi.fn(),
   addDoc: vi.fn(),
   getDocs: vi.fn(),
+  onSnapshot: vi.fn(),
   writeBatch: vi.fn(),
   deleteField: vi.fn(),
 }));
@@ -55,6 +56,7 @@ vi.mock("firebase/firestore", () => ({
   deleteDoc: firestoreMocks.deleteDoc,
   addDoc: firestoreMocks.addDoc,
   getDocs: firestoreMocks.getDocs,
+  onSnapshot: firestoreMocks.onSnapshot,
   writeBatch: firestoreMocks.writeBatch,
   deleteField: firestoreMocks.deleteField,
 }));
@@ -89,6 +91,7 @@ describe("firestoreServices", () => {
     firestoreMocks.deleteDoc.mockReset();
     firestoreMocks.addDoc.mockReset();
     firestoreMocks.getDocs.mockReset();
+    firestoreMocks.onSnapshot.mockReset();
     firestoreMocks.writeBatch.mockReset();
     firestoreMocks.deleteField.mockImplementation(
       () => new FakeFieldValue("deleteField")
@@ -701,12 +704,18 @@ describe("firestoreServices", () => {
   });
 
   describe("firestoreService exported API surface", () => {
-    it("removes clearUserData and exports resetUserProgram and deleteUserData", () => {
+    it("removes clearUserData and exports the 9 canonical firestoreService methods", () => {
       expect(firestoreModule.firestoreService.clearUserData).toBeUndefined();
       expect(firestoreModule.firestoreService.resetUserProgram).toBeTypeOf(
         "function"
       );
       expect(firestoreModule.firestoreService.deleteUserData).toBeTypeOf(
+        "function"
+      );
+      expect(firestoreModule.firestoreService.subscribeUserData).toBeTypeOf(
+        "function"
+      );
+      expect(firestoreModule.firestoreService.subscribeWorkouts).toBeTypeOf(
         "function"
       );
       expect(Object.keys(firestoreModule.firestoreService).sort()).toEqual([
@@ -717,7 +726,359 @@ describe("firestoreServices", () => {
         "migrateLegacyHistory",
         "resetUserProgram",
         "saveUserData",
+        "subscribeUserData",
+        "subscribeWorkouts",
       ]);
+    });
+  });
+
+  describe("firestoreService.subscribeUserData", () => {
+    it("throws synchronously when userId is falsy without registering onSnapshot", () => {
+      expect(firestoreModule.firestoreService.subscribeUserData).toBeTypeOf(
+        "function"
+      );
+
+      for (const badId of ["", null, undefined]) {
+        expect(() =>
+          firestoreModule.firestoreService.subscribeUserData(badId, vi.fn())
+        ).toThrow("User ID is required to subscribe to user data.");
+      }
+
+      expect(firestoreMocks.doc).not.toHaveBeenCalled();
+      expect(firestoreMocks.onSnapshot).not.toHaveBeenCalled();
+    });
+
+    it("throws synchronously when onData is not a function without registering onSnapshot", () => {
+      expect(firestoreModule.firestoreService.subscribeUserData).toBeTypeOf(
+        "function"
+      );
+
+      for (const badCallback of [null, undefined, {}, "callback"]) {
+        expect(() =>
+          firestoreModule.firestoreService.subscribeUserData(
+            "user-1",
+            badCallback
+          )
+        ).toThrow("onData callback is required to subscribe to user data.");
+      }
+
+      expect(firestoreMocks.doc).not.toHaveBeenCalled();
+      expect(firestoreMocks.onSnapshot).not.toHaveBeenCalled();
+    });
+
+    it("subscribes to users/{uid}, forwards docSnap.data() or null, and returns the exact unsubscribe function", () => {
+      expect(firestoreModule.firestoreService.subscribeUserData).toBeTypeOf(
+        "function"
+      );
+
+      const unsubSpy = vi.fn();
+      let capturedRef;
+      let capturedOnNext;
+      firestoreMocks.onSnapshot.mockImplementationOnce((ref, onNext) => {
+        capturedRef = ref;
+        capturedOnNext = onNext;
+        return unsubSpy;
+      });
+
+      const onData = vi.fn();
+      const onError = vi.fn();
+
+      const unsub = firestoreModule.firestoreService.subscribeUserData(
+        "user-7",
+        onData,
+        onError
+      );
+
+      expect(unsub).toBe(unsubSpy);
+      expect(firestoreMocks.doc).toHaveBeenCalledWith(
+        expect.anything(),
+        "users",
+        "user-7"
+      );
+      expect(capturedRef.path).toBe("users/user-7");
+      expect(firestoreMocks.onSnapshot).toHaveBeenCalledTimes(1);
+
+      const payload = {
+        profile: { goal: "muscle" },
+        plan: { programName: "PPL", weeks: [] },
+      };
+      capturedOnNext({
+        exists: () => true,
+        data: () => payload,
+      });
+
+      expect(onData).toHaveBeenCalledTimes(1);
+      expect(onData.mock.calls[0]).toEqual([payload]);
+
+      capturedOnNext({
+        exists: () => false,
+        data: () => undefined,
+      });
+
+      expect(onData).toHaveBeenCalledTimes(2);
+      expect(onData.mock.calls[1]).toEqual([null]);
+      expect(onError).not.toHaveBeenCalled();
+
+      unsub();
+      expect(unsubSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("logs snapshot errors, forwards to onError when provided, and handles omitted onError without throwing", () => {
+      expect(firestoreModule.firestoreService.subscribeUserData).toBeTypeOf(
+        "function"
+      );
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+
+      try {
+        let capturedOnError1;
+        firestoreMocks.onSnapshot.mockImplementationOnce(
+          (_ref, _onNext, onErr) => {
+            capturedOnError1 = onErr;
+            return vi.fn();
+          }
+        );
+
+        const onError = vi.fn();
+        firestoreModule.firestoreService.subscribeUserData(
+          "user-err-1",
+          vi.fn(),
+          onError
+        );
+
+        const snapErr1 = new Error("permission-denied");
+        capturedOnError1(snapErr1);
+
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          "Error subscribing to user data:",
+          snapErr1
+        );
+        expect(onError).toHaveBeenCalledTimes(1);
+        expect(onError).toHaveBeenCalledWith(snapErr1);
+
+        let capturedOnError2;
+        firestoreMocks.onSnapshot.mockImplementationOnce(
+          (_ref, _onNext, onErr) => {
+            capturedOnError2 = onErr;
+            return vi.fn();
+          }
+        );
+
+        firestoreModule.firestoreService.subscribeUserData(
+          "user-err-2",
+          vi.fn()
+        );
+
+        const snapErr2 = new Error("unavailable");
+        expect(() => capturedOnError2(snapErr2)).not.toThrow();
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          "Error subscribing to user data:",
+          snapErr2
+        );
+      } finally {
+        consoleErrorSpy.mockRestore();
+      }
+    });
+  });
+
+  describe("firestoreService.subscribeWorkouts", () => {
+    it("throws synchronously when userId is falsy without registering onSnapshot", () => {
+      expect(firestoreModule.firestoreService.subscribeWorkouts).toBeTypeOf(
+        "function"
+      );
+
+      for (const badId of ["", null, undefined]) {
+        expect(() =>
+          firestoreModule.firestoreService.subscribeWorkouts(badId, vi.fn())
+        ).toThrow("User ID is required to subscribe to workouts.");
+      }
+
+      expect(firestoreMocks.collection).not.toHaveBeenCalled();
+      expect(firestoreMocks.query).not.toHaveBeenCalled();
+      expect(firestoreMocks.onSnapshot).not.toHaveBeenCalled();
+    });
+
+    it("throws synchronously when onData is not a function without registering onSnapshot", () => {
+      expect(firestoreModule.firestoreService.subscribeWorkouts).toBeTypeOf(
+        "function"
+      );
+
+      for (const badCallback of [null, undefined, {}, 42]) {
+        expect(() =>
+          firestoreModule.firestoreService.subscribeWorkouts(
+            "user-1",
+            badCallback
+          )
+        ).toThrow("onData callback is required to subscribe to workouts.");
+      }
+
+      expect(firestoreMocks.collection).not.toHaveBeenCalled();
+      expect(firestoreMocks.query).not.toHaveBeenCalled();
+      expect(firestoreMocks.onSnapshot).not.toHaveBeenCalled();
+    });
+
+    it("subscribes to users/{uid}/workouts ordered by completedAt asc, normalizes docs with id (and empty array), and returns unsubscribe", () => {
+      expect(firestoreModule.firestoreService.subscribeWorkouts).toBeTypeOf(
+        "function"
+      );
+
+      const unsubSpy = vi.fn();
+      let capturedQuery;
+      let capturedOnNext;
+      firestoreMocks.onSnapshot.mockImplementationOnce((q, onNext) => {
+        capturedQuery = q;
+        capturedOnNext = onNext;
+        return unsubSpy;
+      });
+
+      const onData = vi.fn();
+      const onError = vi.fn();
+
+      const unsub = firestoreModule.firestoreService.subscribeWorkouts(
+        "user-9",
+        onData,
+        onError
+      );
+
+      expect(unsub).toBe(unsubSpy);
+      expect(firestoreMocks.collection).toHaveBeenCalledWith(
+        expect.anything(),
+        "users",
+        "user-9",
+        "workouts"
+      );
+      expect(firestoreMocks.orderBy).toHaveBeenCalledWith("completedAt", "asc");
+      expect(firestoreMocks.query).toHaveBeenCalledTimes(1);
+      expect(capturedQuery).toEqual({
+        __type: "query",
+        colRef: { __type: "collection", path: "users/user-9/workouts" },
+        constraints: [
+          { __type: "orderBy", field: "completedAt", direction: "asc" },
+        ],
+      });
+      expect(firestoreMocks.onSnapshot).toHaveBeenCalledTimes(1);
+
+      capturedOnNext({
+        docs: [
+          {
+            id: "w-1",
+            data: () => ({
+              weekNumber: 1,
+              dayNumber: 1,
+              dayName: "Monday",
+              focus: "Push",
+              logs: [],
+              duration: 1200,
+              completedAt: "2026-11-20T10:00:00.000Z",
+            }),
+          },
+          {
+            id: "w-2",
+            data: () => ({
+              weekNumber: 1,
+              dayNumber: 2,
+              dayName: "Wednesday",
+              focus: "Pull",
+              logs: [],
+              duration: 1500,
+              completedAt: "2026-11-22T10:00:00.000Z",
+            }),
+          },
+        ],
+      });
+
+      expect(onData).toHaveBeenCalledTimes(1);
+      expect(onData.mock.calls[0]).toEqual([
+        [
+          {
+            id: "w-1",
+            weekNumber: 1,
+            dayNumber: 1,
+            dayName: "Monday",
+            focus: "Push",
+            logs: [],
+            duration: 1200,
+            completedAt: "2026-11-20T10:00:00.000Z",
+          },
+          {
+            id: "w-2",
+            weekNumber: 1,
+            dayNumber: 2,
+            dayName: "Wednesday",
+            focus: "Pull",
+            logs: [],
+            duration: 1500,
+            completedAt: "2026-11-22T10:00:00.000Z",
+          },
+        ],
+      ]);
+
+      capturedOnNext({ docs: [] });
+      expect(onData).toHaveBeenCalledTimes(2);
+      expect(onData.mock.calls[1]).toEqual([[]]);
+      expect(onError).not.toHaveBeenCalled();
+
+      unsub();
+      expect(unsubSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("logs snapshot errors, forwards to onError when provided, and handles omitted onError without throwing", () => {
+      expect(firestoreModule.firestoreService.subscribeWorkouts).toBeTypeOf(
+        "function"
+      );
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+
+      try {
+        let capturedOnError1;
+        firestoreMocks.onSnapshot.mockImplementationOnce(
+          (_q, _onNext, onErr) => {
+            capturedOnError1 = onErr;
+            return vi.fn();
+          }
+        );
+
+        const onError = vi.fn();
+        firestoreModule.firestoreService.subscribeWorkouts(
+          "user-w-err-1",
+          vi.fn(),
+          onError
+        );
+
+        const snapErr1 = new Error("workouts-permission-denied");
+        capturedOnError1(snapErr1);
+
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          "Error subscribing to workouts:",
+          snapErr1
+        );
+        expect(onError).toHaveBeenCalledTimes(1);
+        expect(onError).toHaveBeenCalledWith(snapErr1);
+
+        let capturedOnError2;
+        firestoreMocks.onSnapshot.mockImplementationOnce(
+          (_q, _onNext, onErr) => {
+            capturedOnError2 = onErr;
+            return vi.fn();
+          }
+        );
+
+        firestoreModule.firestoreService.subscribeWorkouts(
+          "user-w-err-2",
+          vi.fn()
+        );
+
+        const snapErr2 = new Error("workouts-unavailable");
+        expect(() => capturedOnError2(snapErr2)).not.toThrow();
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          "Error subscribing to workouts:",
+          snapErr2
+        );
+      } finally {
+        consoleErrorSpy.mockRestore();
+      }
     });
   });
 

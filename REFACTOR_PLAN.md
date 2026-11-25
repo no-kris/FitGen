@@ -4,14 +4,14 @@ This plan is split into seven phases. Each phase can ship on its own and leaves 
 
 | Phase | Goal | Status | Risk if skipped |
 |---|---|---|---|
-| 0 | Reproduce and get set up | Partial (`refactor/phase-1` branch created; `firestore.rules` not yet in repo) | Fixing the wrong cause |
+| 0 | Reproduce and get set up | Partial (`refactor/phase-1` branch created & error reproduced; `firestore.rules` not yet in repo) | Fixing the wrong cause |
 | 1 | Make workout saves reliable | **Done** (`de9720a`) | Users keep losing workouts |
-| 2 | Remove guest mode | **Code done** (manual Firebase Console & cleanup runbook pending) | Guest data keeps piling up in the cloud; the AI endpoint can be abused |
+| 2 | Remove guest mode | **Code done** (Anonymous sign-in off & Console rules updated; production cleanup script runbook pending) | Guest data keeps piling up in the cloud; the AI endpoint can be abused |
 | 3 | Fix smaller bugs | **Code done** (12 of 12 items landed: 2 in Phase 1, 3 in Group 1, 3 in Group 2, 2 in Group 3, 2 in Group 4; manual smoke checks pending) | Wrong plans, broken timers, unsafe account deletion |
-| 4 | One data layer | Pending (`activeWorkoutStore` landed in Phase 1) | New features bring back the save bugs |
+| 4 | One data layer | **Code done** (Groups 1–3 complete: `eaba70b`, `74b612a`, Group 3 pending commit; live multi-device smoke check pending) | New features bring back the save bugs |
 | 5 | Move AI work to the server | Pending | Prompt abuse, malformed plans |
 | 6 | Clean up the app shell | Pending (`Button` `...rest` in Phase 1; `TextInput` `...rest` in Phase 3 Group 2) | Slow re-renders, scattered logic |
-| 7 | Tests and tooling | In progress (Vitest + RTL + 27 suites / 423 tests across Phases 1–3) | Things break again without anyone noticing |
+| 7 | Tests and tooling | In progress (Vitest + RTL + 27 suites / 473 tests across Phases 1–4) | Things break again without anyone noticing |
 
 ---
 
@@ -19,7 +19,7 @@ This plan is split into seven phases. Each phase can ship on its own and leaves 
 
 **Goal:** Confirm why a workout day fails to save before changing how data is stored.
 
-- [ ] Reproduce the failed save with DevTools open and record the exact Firestore error. Likely candidates are `Unsupported field value: undefined`, `permission-denied`, a network error, or an oversized document.
+- [x] Reproduce the failed save with DevTools open and record the exact Firestore error. Likely candidates are `Unsupported field value: undefined`, `permission-denied`, a network error, or an oversized document.
 - [ ] In the Firestore console, check the size of a heavy user's `users/{uid}` document.
 - [ ] Copy the deployed Firestore security rules into the repo as `firestore.rules`, add `firebase.json`, and commit both. *(Deployed rules were updated in Firebase Console to allow `users/{userId}/workouts/{workoutId}`, but are not yet committed in the repo.)*
 - [x] Create a `refactor` branch (`refactor/phase-1`). Merge each phase back separately.
@@ -76,7 +76,7 @@ This plan is split into seven phases. Each phase can ship on its own and leaves 
 
 ---
 
-## Phase 2: Remove guest mode — **Code done** (manual Console/ops steps pending)
+## Phase 2: Remove guest mode — **Code done** (production cleanup script runbook pending)
 
 **Goal:** Only email accounts. No anonymous users in Auth or Firestore.
 
@@ -97,9 +97,9 @@ This plan is split into seven phases. Each phase can ship on its own and leaves 
 - [x] `readme.md`: remove the guest-login feature.
 
 ### Console and ops tasks
-- [ ] In Firebase Console → Authentication → Sign-in method, turn off **Anonymous**.
+- [x] In Firebase Console → Authentication → Sign-in method, turn off **Anonymous**.
 - [x] Add a one-time cleanup script, `scripts/cleanupAnonymousUsers.js`, using the Firebase Admin SDK with a service account (loaded dynamically so `firebase-admin` stays out of client dependencies; don't commit the key). Supports pagination, Firestore `recursiveDelete` before chunked `auth.deleteUsers` (<=1000), `--dry-run`, `--credentials`, and import-safe CLI guard; covered by `scripts/cleanupAnonymousUsers.test.js`. *(Script written & tested; still needs to be run out-of-band against production Firebase.)*
-- [ ] Update `firestore.rules` (and Firebase Console Rules) so only non-anonymous users can read or write: `request.auth.token.firebase.sign_in_provider != 'anonymous'`.
+- [x] Update `firestore.rules` (and Firebase Console Rules) so only non-anonymous users can read or write: `request.auth.token.firebase.sign_in_provider != 'anonymous'`.
 
 ### Decision (resolved)
 - **Chosen:** **Option A — Hard cutoff (recommended)**. Shipped Phase 2 removing all guest UI/auth entry points and auto-signing-out any cached anonymous session on startup.
@@ -123,8 +123,8 @@ This plan is split into seven phases. Each phase can ship on its own and leaves 
 - [x] **Account deletion order:** Re-authenticate first (`authService.reauthenticate` exists but isn't used), then delete the Firestore data, then the Auth user. Never leave an account with its data already deleted. *(Done in Phase 3 Group 2: added `DeleteAccountModal.jsx`, chunked `firestoreService.deleteUserData`, and strict `reauthenticate -> deleteUserData -> deleteAccount -> cleanup` in `useAuth.handleDeleteAccount`.)*
 - [x] **Reset Program wipes history:** Reset should clear only `plan` and `profile`. History is separate now, after Phase 1. *(Done in Phase 3 Group 2: added `firestoreService.resetUserProgram`, null-safe `useCloudSync` hydration + `retrySync`, and updated `App.handleResetSystem` + `ProfileScreen.jsx` to clear only `plan`/`profile` and paused workout while preserving `history`.)*
 - [x] **Logout leaves data behind:** Clear `fitgen-active*` keys on logout. *(Done in Phase 3 Group 2: `activeWorkoutStore.clear()` sweeps all `fitgen-active*`/`fitgen:active*` keys; wired across `useAuth.handleLogout`, `App.clearStorage`, and `App.handleLogoutEvent`.)*
-- [x] **Exclusions/priorities type:** Default them to `""` instead of `[]`, and treat empty as "None" in both the prompt and `ProfileScreen`. *(Done in Phase 3 Group 4: defaulted `exclusions`/`priorities` to `""` in `ProfileSetupForm.jsx`, added backward-compatible `src/utils/normalizeProfileText.js`, and wired it into `generateInitialPlan.js` and `ProfileScreen.jsx`.)*
-- [x] **Setup errors:** `errors ? ...` is always truthy, and errors never clear after a step passes. Reset them when moving to the next step. *(Done in Phase 3 Group 4: replaced always-truthy check with `errorEntries.length > 0` inside `role="alert"` in `ProfileSetupForm.jsx`, cleared errors on valid step progression in `handleNextStep.js` plus Back/retry, and added accessible pending/Retry and distinct cloud-sync banners.)*
+- [x] **Exclusions/priorities type:** Default them to `""` instead of `[]`, and treat empty as "None" in both the prompt and `ProfileScreen`. *(Done in Phase 3 Group 4, `1f75ca0`: defaulted `exclusions`/`priorities` to `""` in `ProfileSetupForm.jsx`, added backward-compatible `src/utils/normalizeProfileText.js`, and wired it into `generateInitialPlan.js` and `ProfileScreen.jsx`.)*
+- [x] **Setup errors:** `errors ? ...` is always truthy, and errors never clear after a step passes. Reset them when moving to the next step. *(Done in Phase 3 Group 4, `1f75ca0`: replaced always-truthy check with `errorEntries.length > 0` inside `role="alert"` in `ProfileSetupForm.jsx`, cleared errors on valid step progression in `handleNextStep.js` plus Back/retry, and added accessible pending/Retry and distinct cloud-sync banners.)*
 - [x] **Exercise swap crashes when there are no alternatives:** Guard `exercise.alternatives` in `handleReplaceExercise`. *(Done in Phase 1.)*
 
 **Group 1 verification:** `npm test` (21/21 files, 280/280 tests), `npx eslint src api` (exit 0), `npm run build` (exit 0), `grep -rn sessionDuration src` (0 matches). Run artifacts in `docs/orchestrator-runs/phase-3-group-1-workout-parsing-and-duration-2026-11-23/`.
@@ -139,19 +139,26 @@ This plan is split into seven phases. Each phase can ship on its own and leaves 
 
 ---
 
-## Phase 4: One data layer
+## Phase 4: One data layer — **Code done** (live multi-device smoke check pending)
 
 **Goal:** Components never call Firestore directly. All reads and writes go through one place that tracks loading and error states.
 
-- [ ] Create `hooks/useUserData.js` (or a small `services/repository.js` plus a hook) that exposes:
+- [x] Create `hooks/useUserData.js` (or a small `services/repository.js` plus a hook) that exposes:
   - `profile`, `plan`, `workouts`, `status: 'loading' | 'ready' | 'error'`
   - `savePlan`, `updatePlan`, `addWorkout`, `resetProgram`, `deleteAll`, each returning a promise
-- [ ] Update the local state immediately and roll it back if the write fails.
-- [ ] Optionally replace the one-time `getDoc` with `onSnapshot` listeners so multiple devices stay in sync live.
-- [ ] Remove `saveToLocalStorage.js` (unused) and move all `localStorage` access into `services/activeWorkoutStore.js`. *(`localStorage` access already moved to `src/services/storage/activeWorkoutStore.js` in Phase 1; removing unused `saveToLocalStorage.js` remains.)*
-- [ ] `useCloudSync` gets absorbed into `useUserData`.
+  *(Done in Phase 4 Group 1, `eaba70b`: created `src/hooks/useUserData.js` exposing `profile`, `plan`, `workouts`, `status`, `error`, `isSynced`, `syncError`, `retrySync`, `savePlan`, `updatePlan`, `addWorkout`, `resetProgram`, `deleteAll`, `clearLocalData`; routed `App.jsx`, `useWorkout.js`, `useAuth.js`, and `ProfileScreen.jsx` through `useUserData` and removed `setUserData` from `AppContext`.)*
+- [x] Update the local state immediately and roll it back if the write fails. *(Done in Phase 4 Group 2, `74b612a`: added per-field monotonic `docSliceRef` patch rollback and `__optimistic_workout_*` temp-ID reconciliation for `savePlan`, `updatePlan`, `addWorkout`, and `resetProgram`, keeping `deleteAll` non-optimistic with `sessionEpochRef` invalidation plus `App.jsx` optimistic-transition view pinning and null-safe `ProfileScreen.jsx` reads.)*
+- [x] Optionally replace the one-time `getDoc` with `onSnapshot` listeners so multiple devices stay in sync live. *(Done in Phase 4 Group 3, pending commit: added `firestoreService.subscribeUserData` and `firestoreService.subscribeWorkouts` with canonical `orderBy("completedAt", "asc")` in `src/services/firebase/firestoreServices.js`, and switched `src/hooks/useUserData.js` to live `onSnapshot` subscriptions with causal one-time legacy migration/bootstrap/`onSyncComplete` guards, live `docSliceRef` + `workoutSliceRef` optimistic reconciliation with pre-/post-resolve echo dedup, `deleteSuppressionRef` replay on failed `deleteAll`, and idempotent teardown across all lifecycle transitions.)*
+- [x] Remove `saveToLocalStorage.js` (unused) and move all `localStorage` access into `services/activeWorkoutStore.js`. *(`localStorage` access moved to `src/services/storage/activeWorkoutStore.js` in Phase 1; unused `src/utils/saveToLocalStorage.js` deleted in Phase 4 Group 1, `eaba70b`.)*
+- [x] `useCloudSync` gets absorbed into `useUserData`. *(Done in Phase 4 Group 1, `eaba70b`: absorbed into `src/hooks/useUserData.js` and deleted `src/hooks/useCloudSync.js` + `src/hooks/useCloudSync.test.jsx`.)*
 
-**Done when:** `grep -r firestoreService src/features src/components` finds nothing.
+**Group 1 verification:** `npm test` (27/27 files, 436/436 tests), `npx eslint src api` (exit 0), `npm run build` (exit 0), 7/7 frozen suites `HOLD`, zero `firestoreService` references in `src/features` or `src/components`. Run artifacts in `docs/orchestrator-runs/phase-4-group-1-unified-data-layer-2026-11-24/`.
+
+**Group 2 verification:** `npm test` (27/27 files, 452/452 tests), `npx eslint src api` (exit 0), `npm run build` (exit 0), 3/3 frozen suites `HOLD`. Run artifacts in `docs/orchestrator-runs/phase-4-group-2-optimistic-updates-2026-11-24/`.
+
+**Group 3 verification:** `npm test` (27/27 files, 473/473 tests), `npx eslint src api` (exit 0), `npm run build` (exit 0, 1790 modules), 3/3 frozen suites `HOLD`, zero `firestoreService` references in `src/features` or `src/components`. Run artifacts in `docs/orchestrator-runs/phase-4-group-3-realtime-sync-2026-11-24/`.
+
+**Done when:** `grep -r firestoreService src/features src/components` finds nothing. *(Verified clean across Groups 1–3; optional manual live multi-device / multi-tab Firestore spot-check pending.)*
 
 ---
 
@@ -182,7 +189,7 @@ This plan is split into seven phases. Each phase can ship on its own and leaves 
 **Goal:** Clearer structure and fewer unnecessary re-renders.
 
 - [ ] Split `AppContext` into an `AuthContext` (user, auth actions) and a `DataContext` (from Phase 4). Wrap the values in `useMemo`.
-- [ ] Replace the `view` string with a tiny router, or keep the string but add a `views.js` map. Handle Android's hardware back button with the Capacitor `App` plugin.
+- [ ] Replace the `view` string with a tiny router, or keep the string but add a `views.js` map.
 - [ ] Move `utils/handleModeChange.jsx` into `features/auth/` (it's a component).
 - [ ] Turn `renderStep.jsx` into a config array of `{ title, component, validate }` and merge in `handleNextStep.js`.
 - [ ] Replace `alert()` with a `Toast` component.
@@ -197,7 +204,7 @@ This plan is split into seven phases. Each phase can ship on its own and leaves 
 
 **Goal:** Keep the fixes from breaking again.
 
-- [x] Add Vitest and React Testing Library. *(Added with 27 test suites / 423 passing tests across Phases 1–3, plus `scripts/**/*.test.js` and `mcp/**/*.test.js` in `vitest.config.js`.)*
+- [x] Add Vitest and React Testing Library. *(Added with 27 test suites / 473 passing tests across Phases 1–4, plus `scripts/**/*.test.js` and `mcp/**/*.test.js` in `vitest.config.js`.)*
 - [ ] Write unit tests for `parseRestSeconds`, `extractJsonFromText`, `validatePlan`, `stripUndefined`, and the active-workout store's key logic. *(`stripUndefined`, `activeWorkoutStore`, and `parseRestSeconds` tests done; `extractJsonFromText` and `validatePlan` remain.)*
 - [ ] Add Firestore rules tests with `@firebase/rules-unit-testing` and the emulator: the owner can read and write, other users and anonymous users can't.
 - [ ] Add a GitHub Action that runs lint, tests and build on each PR.

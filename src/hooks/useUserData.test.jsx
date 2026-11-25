@@ -10,6 +10,8 @@ const firestoreServiceMock = vi.hoisted(() => ({
   migrateLegacyHistory: vi.fn(),
   resetUserProgram: vi.fn(),
   deleteUserData: vi.fn(),
+  subscribeUserData: vi.fn(),
+  subscribeWorkouts: vi.fn(),
 }));
 
 vi.mock("../services/firebase/firestoreServices", () => ({
@@ -51,9 +53,110 @@ function makeWorkout(id = "w-1", overrides = {}) {
   };
 }
 
+function createSubscriptionHarness() {
+  const userSubs = [];
+  const workoutSubs = [];
+
+  firestoreServiceMock.subscribeUserData.mockImplementation(
+    (uid, onData, onError) => {
+      const sub = {
+        uid,
+        onData,
+        onError,
+        unsub: vi.fn(),
+        emit: (data) => {
+          act(() => {
+            onData(data);
+          });
+        },
+        emitError: (err) => {
+          act(() => {
+            onError?.(err);
+          });
+        },
+      };
+      userSubs.push(sub);
+      return sub.unsub;
+    }
+  );
+
+  firestoreServiceMock.subscribeWorkouts.mockImplementation(
+    (uid, onData, onError) => {
+      const sub = {
+        uid,
+        onData,
+        onError,
+        unsub: vi.fn(),
+        emit: (workouts) => {
+          act(() => {
+            onData(workouts);
+          });
+        },
+        emitError: (err) => {
+          act(() => {
+            onError?.(err);
+          });
+        },
+      };
+      workoutSubs.push(sub);
+      return sub.unsub;
+    }
+  );
+
+  return {
+    userSubs,
+    workoutSubs,
+    latestUserSub: () => {
+      expect(userSubs.length).toBeGreaterThan(0);
+      return userSubs[userSubs.length - 1];
+    },
+    latestWorkoutsSub: () => {
+      expect(workoutSubs.length).toBeGreaterThan(0);
+      return workoutSubs[workoutSubs.length - 1];
+    },
+    emitUser: (data) => {
+      expect(userSubs.length).toBeGreaterThan(0);
+      act(() => {
+        userSubs[userSubs.length - 1].onData(data);
+      });
+    },
+    emitUserError: (err) => {
+      expect(userSubs.length).toBeGreaterThan(0);
+      act(() => {
+        userSubs[userSubs.length - 1].onError?.(err);
+      });
+    },
+    emitWorkouts: (workouts) => {
+      expect(workoutSubs.length).toBeGreaterThan(0);
+      act(() => {
+        workoutSubs[workoutSubs.length - 1].onData(workouts);
+      });
+    },
+    emitWorkoutsError: (err) => {
+      expect(workoutSubs.length).toBeGreaterThan(0);
+      act(() => {
+        workoutSubs[workoutSubs.length - 1].onError?.(err);
+      });
+    },
+    emitInitial: (userData, workouts = []) => {
+      expect(userSubs.length).toBeGreaterThan(0);
+      act(() => {
+        userSubs[userSubs.length - 1].onData(userData);
+      });
+      expect(workoutSubs.length).toBeGreaterThan(0);
+      act(() => {
+        workoutSubs[workoutSubs.length - 1].onData(workouts);
+      });
+    },
+  };
+}
+
 describe("useUserData", () => {
+  let subs;
+
   beforeEach(() => {
     vi.resetAllMocks();
+    subs = createSubscriptionHarness();
   });
 
   afterEach(() => {
@@ -96,6 +199,8 @@ describe("useUserData", () => {
         result.current.retrySync();
       });
 
+      expect(firestoreServiceMock.subscribeUserData).not.toHaveBeenCalled();
+      expect(firestoreServiceMock.subscribeWorkouts).not.toHaveBeenCalled();
       expect(firestoreServiceMock.getUserData).not.toHaveBeenCalled();
       expect(firestoreServiceMock.getWorkouts).not.toHaveBeenCalled();
       expect(firestoreServiceMock.migrateLegacyHistory).not.toHaveBeenCalled();
@@ -105,16 +210,7 @@ describe("useUserData", () => {
   });
 
   describe("cloud sync lifecycle, migration, bootstrap, and retry", () => {
-    it("starts in loading and transitions to ready only after getUserData and getWorkouts succeed without refetching on onSyncComplete identity changes", async () => {
-      const userDeferred = createDeferred();
-      const workoutsDeferred = createDeferred();
-      firestoreServiceMock.getUserData.mockReturnValueOnce(
-        userDeferred.promise
-      );
-      firestoreServiceMock.getWorkouts.mockReturnValueOnce(
-        workoutsDeferred.promise
-      );
-
+    it("starts in loading and transitions to ready only after subscribeUserData and subscribeWorkouts emit initial snapshots without resubscribing on onSyncComplete identity changes", () => {
       const firstCallback = vi.fn();
       const secondCallback = vi.fn();
       const user = { uid: "user-1" };
@@ -131,27 +227,34 @@ describe("useUserData", () => {
       expect(result.current.profile).toBeNull();
       expect(result.current.plan).toBeNull();
       expect(result.current.workouts).toEqual([]);
+      expect(firestoreServiceMock.subscribeUserData).toHaveBeenCalledTimes(1);
+      expect(firestoreServiceMock.subscribeUserData).toHaveBeenCalledWith(
+        "user-1",
+        expect.any(Function),
+        expect.any(Function)
+      );
+      expect(firestoreServiceMock.subscribeWorkouts).not.toHaveBeenCalled();
 
       const cloudPlan = { programName: "PPL", totalWeeks: 4, weeks: [] };
       const cloudProfile = { goal: "muscle" };
-      userDeferred.resolve({ plan: cloudPlan, profile: cloudProfile });
+      subs.emitUser({ plan: cloudPlan, profile: cloudProfile });
 
-      await waitFor(() => {
-        expect(firestoreServiceMock.getWorkouts).toHaveBeenCalledWith("user-1");
-      });
+      expect(firestoreServiceMock.subscribeWorkouts).toHaveBeenCalledTimes(1);
+      expect(firestoreServiceMock.subscribeWorkouts).toHaveBeenCalledWith(
+        "user-1",
+        expect.any(Function),
+        expect.any(Function)
+      );
       expect(result.current.status).toBe("loading");
       expect(result.current.isSynced).toBe(false);
 
-      // Update callback reference before workouts resolves
+      // Update callback reference before workouts snapshot arrives
       rerender({ onSyncComplete: secondCallback });
 
       const cloudWorkouts = [makeWorkout("w-1")];
-      workoutsDeferred.resolve(cloudWorkouts);
+      subs.emitWorkouts(cloudWorkouts);
 
-      await waitFor(() => {
-        expect(result.current.status).toBe("ready");
-      });
-
+      expect(result.current.status).toBe("ready");
       expect(result.current.isSynced).toBe(true);
       expect(result.current.error).toBeNull();
       expect(result.current.syncError).toBeNull();
@@ -159,16 +262,21 @@ describe("useUserData", () => {
       expect(result.current.plan).toEqual(cloudPlan);
       expect(result.current.workouts).toEqual(cloudWorkouts);
       expect(firestoreServiceMock.migrateLegacyHistory).not.toHaveBeenCalled();
+      expect(firestoreServiceMock.getUserData).not.toHaveBeenCalled();
+      expect(firestoreServiceMock.getWorkouts).not.toHaveBeenCalled();
       expect(firstCallback).not.toHaveBeenCalled();
+      expect(secondCallback).toHaveBeenCalledTimes(1);
       expect(secondCallback).toHaveBeenCalledWith(true);
 
-      // Changing onSyncComplete again must NOT trigger another fetch
+      // Changing onSyncComplete again must NOT unsubscribe or re-subscribe
       rerender({ onSyncComplete: vi.fn() });
-      expect(firestoreServiceMock.getUserData).toHaveBeenCalledTimes(1);
-      expect(firestoreServiceMock.getWorkouts).toHaveBeenCalledTimes(1);
+      expect(firestoreServiceMock.subscribeUserData).toHaveBeenCalledTimes(1);
+      expect(firestoreServiceMock.subscribeWorkouts).toHaveBeenCalledTimes(1);
+      expect(subs.latestUserSub().unsub).not.toHaveBeenCalled();
+      expect(subs.latestWorkoutsSub().unsub).not.toHaveBeenCalled();
     });
 
-    it("runs migrateLegacyHistory strictly after getUserData and before getWorkouts when cloud doc has legacy history array", async () => {
+    it("runs migrateLegacyHistory strictly after initial subscribeUserData snapshot and before subscribeWorkouts when cloud doc has legacy history array", async () => {
       const callOrder = [];
       const legacyHistory = [
         {
@@ -185,48 +293,64 @@ describe("useUserData", () => {
         }),
       ];
 
-      firestoreServiceMock.getUserData.mockImplementationOnce(async () => {
-        callOrder.push("getUserData");
-        return {
-          profile: { goal: "strength" },
-          plan: { programName: "Strength", weeks: [] },
-          history: legacyHistory,
-        };
-      });
-      firestoreServiceMock.migrateLegacyHistory.mockImplementationOnce(
-        async () => {
-          callOrder.push("migrateLegacyHistory");
-          return { migratedCount: 1 };
+      const origSubUser = firestoreServiceMock.subscribeUserData.getMockImplementation();
+      const origSubWorkouts = firestoreServiceMock.subscribeWorkouts.getMockImplementation();
+      firestoreServiceMock.subscribeUserData.mockImplementationOnce(
+        (uid, onData, onError) => {
+          callOrder.push("subscribeUserData");
+          return origSubUser(uid, onData, onError);
         }
       );
-      firestoreServiceMock.getWorkouts.mockImplementationOnce(async () => {
-        callOrder.push("getWorkouts");
-        return migratedWorkouts;
+      firestoreServiceMock.subscribeWorkouts.mockImplementationOnce(
+        (uid, onData, onError) => {
+          callOrder.push("subscribeWorkouts");
+          return origSubWorkouts(uid, onData, onError);
+        }
+      );
+
+      const migrateDeferred = createDeferred();
+      firestoreServiceMock.migrateLegacyHistory.mockImplementationOnce(() => {
+        callOrder.push("migrateLegacyHistory");
+        return migrateDeferred.promise;
       });
 
       const user = { uid: "user-legacy" };
       const { result } = renderHook(() => useUserData(user));
 
-      await waitFor(() => {
-        expect(result.current.status).toBe("ready");
+      subs.emitUser({
+        profile: { goal: "strength" },
+        plan: { programName: "Strength", weeks: [] },
+        history: legacyHistory,
       });
 
-      expect(result.current.isSynced).toBe(true);
-      expect(callOrder).toEqual([
-        "getUserData",
-        "migrateLegacyHistory",
-        "getWorkouts",
-      ]);
       expect(firestoreServiceMock.migrateLegacyHistory).toHaveBeenCalledWith(
         "user-legacy",
         legacyHistory
       );
+      expect(firestoreServiceMock.subscribeWorkouts).not.toHaveBeenCalled();
+
+      await act(async () => {
+        migrateDeferred.resolve({ migratedCount: 1 });
+        await migrateDeferred.promise;
+      });
+
+      await waitFor(() => {
+        expect(firestoreServiceMock.subscribeWorkouts).toHaveBeenCalledTimes(1);
+      });
+
+      subs.emitWorkouts(migratedWorkouts);
+
+      expect(result.current.status).toBe("ready");
+      expect(result.current.isSynced).toBe(true);
+      expect(callOrder).toEqual([
+        "subscribeUserData",
+        "migrateLegacyHistory",
+        "subscribeWorkouts",
+      ]);
       expect(result.current.workouts).toEqual(migratedWorkouts);
     });
 
     it("bootstraps pre-login local plan and profile without history when cloud has no doc or workouts", async () => {
-      firestoreServiceMock.getUserData.mockResolvedValueOnce(null);
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce([]);
       firestoreServiceMock.saveUserData.mockResolvedValueOnce(undefined);
 
       const onSyncComplete = vi.fn();
@@ -253,6 +377,7 @@ describe("useUserData", () => {
       expect(firestoreServiceMock.saveUserData).not.toHaveBeenCalled();
 
       rerender({ currentUser: { uid: "user-new" } });
+      subs.emitInitial(null, []);
 
       await waitFor(() => {
         expect(result.current.status).toBe("ready");
@@ -269,10 +394,11 @@ describe("useUserData", () => {
       expect(result.current.plan).toEqual(localPlan);
       expect(result.current.profile).toEqual(localProfile);
       expect(result.current.workouts).toEqual([]);
+      expect(onSyncComplete).toHaveBeenCalledTimes(1);
       expect(onSyncComplete).toHaveBeenCalledWith(true);
     });
 
-    it("hydrates null plan and profile while preserving workouts on reload after Reset Program", async () => {
+    it("hydrates null plan and profile while preserving workouts on reload after Reset Program", () => {
       const existingWorkouts = [
         makeWorkout("w-1"),
         makeWorkout("w-2", {
@@ -282,12 +408,6 @@ describe("useUserData", () => {
           completedAt: "2026-11-22T10:00:00.000Z",
         }),
       ];
-      firestoreServiceMock.getUserData.mockResolvedValueOnce({
-        plan: null,
-        profile: null,
-        updatedAt: "2026-11-24T00:00:00.000Z",
-      });
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce(existingWorkouts);
 
       const onSyncComplete = vi.fn();
       const user = { uid: "user-after-reset" };
@@ -296,10 +416,16 @@ describe("useUserData", () => {
         useUserData(user, { onSyncComplete })
       );
 
-      await waitFor(() => {
-        expect(result.current.status).toBe("ready");
-      });
+      subs.emitInitial(
+        {
+          plan: null,
+          profile: null,
+          updatedAt: "2026-11-24T00:00:00.000Z",
+        },
+        existingWorkouts
+      );
 
+      expect(result.current.status).toBe("ready");
       expect(result.current.isSynced).toBe(true);
       expect(result.current.error).toBeNull();
       expect(result.current.syncError).toBeNull();
@@ -309,16 +435,11 @@ describe("useUserData", () => {
       expect(onSyncComplete).toHaveBeenCalledWith(false);
     });
 
-    it("transitions to status=error with error and syncError (never masked as loading) when sync fails", async () => {
+    it("transitions to status=error with error and syncError (never masked as loading) when legacy migration fails", async () => {
       const consoleErrorSpy = vi
         .spyOn(console, "error")
         .mockImplementation(() => {});
       const syncFailure = new Error("Firestore unavailable");
-      firestoreServiceMock.getUserData.mockResolvedValueOnce({
-        plan: null,
-        profile: null,
-        history: [{ workout: { dayName: "Monday" } }],
-      });
       firestoreServiceMock.migrateLegacyHistory.mockRejectedValueOnce(
         syncFailure
       );
@@ -331,6 +452,12 @@ describe("useUserData", () => {
           useUserData(user, { onSyncComplete })
         );
 
+        subs.emitUser({
+          plan: null,
+          profile: null,
+          history: [{ workout: { dayName: "Monday" } }],
+        });
+
         await waitFor(() => {
           expect(result.current.status).toBe("error");
         });
@@ -338,20 +465,20 @@ describe("useUserData", () => {
         expect(result.current.error).toBe(syncFailure);
         expect(result.current.syncError).toBe(syncFailure);
         expect(result.current.isSynced).toBe(false);
-        expect(firestoreServiceMock.getWorkouts).not.toHaveBeenCalled();
+        expect(firestoreServiceMock.subscribeWorkouts).not.toHaveBeenCalled();
+        expect(subs.latestUserSub().unsub).toHaveBeenCalledTimes(1);
         expect(onSyncComplete).toHaveBeenCalledWith(false);
       } finally {
         consoleErrorSpy.mockRestore();
       }
     });
 
-    it("retrySync transitions error -> loading (clearing error immediately) -> ready on recovery, or updates error on repeat failure", async () => {
+    it("retrySync transitions error -> loading (clearing error immediately) -> ready on recovery, or updates error on repeat failure", () => {
       const consoleErrorSpy = vi
         .spyOn(console, "error")
         .mockImplementation(() => {});
       const err1 = new Error("Network offline");
       const err2 = new Error("Still offline");
-      firestoreServiceMock.getUserData.mockRejectedValueOnce(err1);
 
       const onSyncComplete = vi.fn();
       const user = { uid: "user-retry" };
@@ -361,18 +488,13 @@ describe("useUserData", () => {
           useUserData(user, { onSyncComplete })
         );
 
-        await waitFor(() => {
-          expect(result.current.status).toBe("error");
-        });
+        subs.emitUserError(err1);
+
+        expect(result.current.status).toBe("error");
         expect(result.current.error).toBe(err1);
         expect(result.current.syncError).toBe(err1);
 
         // First retry fails with a new error
-        const firstRetryDeferred = createDeferred();
-        firestoreServiceMock.getUserData.mockReturnValueOnce(
-          firstRetryDeferred.promise
-        );
-
         act(() => {
           result.current.retrySync();
         });
@@ -382,25 +504,14 @@ describe("useUserData", () => {
         expect(result.current.syncError).toBeNull();
         expect(result.current.isSynced).toBe(false);
 
-        firstRetryDeferred.reject(err2);
+        subs.emitUserError(err2);
 
-        await waitFor(() => {
-          expect(result.current.status).toBe("error");
-        });
+        expect(result.current.status).toBe("error");
         expect(result.current.error).toBe(err2);
         expect(result.current.syncError).toBe(err2);
         expect(result.current.isSynced).toBe(false);
 
         // Second retry succeeds
-        const recoverUserDeferred = createDeferred();
-        const recoverWorkoutsDeferred = createDeferred();
-        firestoreServiceMock.getUserData.mockReturnValueOnce(
-          recoverUserDeferred.promise
-        );
-        firestoreServiceMock.getWorkouts.mockReturnValueOnce(
-          recoverWorkoutsDeferred.promise
-        );
-
         act(() => {
           result.current.retrySync();
         });
@@ -409,15 +520,15 @@ describe("useUserData", () => {
         expect(result.current.error).toBeNull();
         expect(result.current.syncError).toBeNull();
 
-        recoverUserDeferred.resolve({
-          plan: { programName: "Recovered Plan", weeks: [] },
-          profile: { goal: "strength" },
-        });
-        recoverWorkoutsDeferred.resolve([makeWorkout("w-recovered")]);
+        subs.emitInitial(
+          {
+            plan: { programName: "Recovered Plan", weeks: [] },
+            profile: { goal: "strength" },
+          },
+          [makeWorkout("w-recovered")]
+        );
 
-        await waitFor(() => {
-          expect(result.current.status).toBe("ready");
-        });
+        expect(result.current.status).toBe("ready");
         expect(result.current.isSynced).toBe(true);
         expect(result.current.error).toBeNull();
         expect(result.current.syncError).toBeNull();
@@ -435,12 +546,7 @@ describe("useUserData", () => {
   });
 
   describe("session isolation (logout, re-login, account switch, stale writes)", () => {
-    it("immediately clears data on logout and ignores in-flight sync resolution/rejection", async () => {
-      const inFlightDeferred = createDeferred();
-      firestoreServiceMock.getUserData.mockReturnValueOnce(
-        inFlightDeferred.promise
-      );
-
+    it("immediately clears data on logout and ignores late snapshot/error callbacks", () => {
       const onSyncComplete = vi.fn();
       const { result, rerender } = renderHook(
         ({ currentUser }) => useUserData(currentUser, { onSyncComplete }),
@@ -448,6 +554,7 @@ describe("useUserData", () => {
       );
 
       expect(result.current.status).toBe("loading");
+      const firstSub = subs.latestUserSub();
 
       rerender({ currentUser: null });
 
@@ -458,14 +565,13 @@ describe("useUserData", () => {
       expect(result.current.profile).toBeNull();
       expect(result.current.plan).toBeNull();
       expect(result.current.workouts).toEqual([]);
+      expect(firstSub.unsub).toHaveBeenCalledTimes(1);
 
-      await act(async () => {
-        inFlightDeferred.resolve({
-          plan: { programName: "Late Plan", weeks: [] },
-          profile: { goal: "muscle" },
-        });
-        await Promise.resolve();
+      firstSub.emit({
+        plan: { programName: "Late Plan", weeks: [] },
+        profile: { goal: "muscle" },
       });
+      firstSub.emitError(new Error("Late error"));
 
       expect(result.current.profile).toBeNull();
       expect(result.current.plan).toBeNull();
@@ -474,24 +580,22 @@ describe("useUserData", () => {
       expect(onSyncComplete).not.toHaveBeenCalled();
     });
 
-    it("starts in loading and performs a fresh sync when logging out and logging back in as the same uid", async () => {
-      firestoreServiceMock.getUserData.mockResolvedValueOnce({
-        plan: { programName: "Session 1 Plan", weeks: [] },
-        profile: { goal: "muscle" },
-      });
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce([
-        makeWorkout("w-1"),
-      ]);
-
+    it("starts in loading and performs a fresh subscription when logging out and logging back in as the same uid", () => {
       const { result, rerender } = renderHook(
         ({ currentUser }) => useUserData(currentUser),
         { initialProps: { currentUser: { uid: "user-same" } } }
       );
 
-      await waitFor(() => {
-        expect(result.current.status).toBe("ready");
-        expect(result.current.isSynced).toBe(true);
-      });
+      subs.emitInitial(
+        {
+          plan: { programName: "Session 1 Plan", weeks: [] },
+          profile: { goal: "muscle" },
+        },
+        [makeWorkout("w-1")]
+      );
+
+      expect(result.current.status).toBe("ready");
+      expect(result.current.isSynced).toBe(true);
       expect(result.current.plan.programName).toBe("Session 1 Plan");
 
       // Logout clears immediately
@@ -503,56 +607,43 @@ describe("useUserData", () => {
       expect(result.current.workouts).toEqual([]);
 
       // Re-login as same uid must start in loading
-      const reLoginDeferred = createDeferred();
-      firestoreServiceMock.getUserData.mockReturnValueOnce(
-        reLoginDeferred.promise
-      );
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce([]);
-
       rerender({ currentUser: { uid: "user-same" } });
 
       expect(result.current.status).toBe("loading");
       expect(result.current.isSynced).toBe(false);
       expect(result.current.plan).toBeNull();
 
-      reLoginDeferred.resolve({
-        plan: { programName: "Session 2 Plan", weeks: [] },
-        profile: { goal: "strength" },
-      });
+      subs.emitInitial(
+        {
+          plan: { programName: "Session 2 Plan", weeks: [] },
+          profile: { goal: "strength" },
+        },
+        []
+      );
 
-      await waitFor(() => {
-        expect(result.current.status).toBe("ready");
-        expect(result.current.isSynced).toBe(true);
-      });
+      expect(result.current.status).toBe("ready");
+      expect(result.current.isSynced).toBe(true);
       expect(result.current.plan.programName).toBe("Session 2 Plan");
-      expect(firestoreServiceMock.getUserData).toHaveBeenCalledTimes(2);
+      expect(firestoreServiceMock.subscribeUserData).toHaveBeenCalledTimes(2);
     });
 
-    it("immediately clears userA data on direct userA -> userB switch and never bootstraps userA data into userB", async () => {
-      firestoreServiceMock.getUserData.mockResolvedValueOnce({
-        plan: { programName: "User A Plan", weeks: [] },
-        profile: { goal: "User A Goal" },
-      });
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce([
-        makeWorkout("w-a"),
-      ]);
-
+    it("immediately clears userA data on direct userA -> userB switch and never bootstraps userA data into userB", () => {
       const onSyncComplete = vi.fn();
       const { result, rerender } = renderHook(
         ({ currentUser }) => useUserData(currentUser, { onSyncComplete }),
         { initialProps: { currentUser: { uid: "user-A" } } }
       );
 
-      await waitFor(() => {
-        expect(result.current.status).toBe("ready");
-      });
-      expect(result.current.plan.programName).toBe("User A Plan");
-
-      const userBDeferred = createDeferred();
-      firestoreServiceMock.getUserData.mockReturnValueOnce(
-        userBDeferred.promise
+      subs.emitInitial(
+        {
+          plan: { programName: "User A Plan", weeks: [] },
+          profile: { goal: "User A Goal" },
+        },
+        [makeWorkout("w-a")]
       );
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce([]);
+
+      expect(result.current.status).toBe("ready");
+      expect(result.current.plan.programName).toBe("User A Plan");
 
       rerender({ currentUser: { uid: "user-B" } });
 
@@ -563,13 +654,10 @@ describe("useUserData", () => {
       expect(result.current.profile).toBeNull();
       expect(result.current.workouts).toEqual([]);
 
-      userBDeferred.resolve(null);
+      subs.emitInitial(null, []);
 
-      await waitFor(() => {
-        expect(result.current.status).toBe("ready");
-        expect(result.current.isSynced).toBe(true);
-      });
-
+      expect(result.current.status).toBe("ready");
+      expect(result.current.isSynced).toBe(true);
       expect(firestoreServiceMock.saveUserData).not.toHaveBeenCalled();
       expect(result.current.plan).toBeNull();
       expect(result.current.profile).toBeNull();
@@ -578,14 +666,6 @@ describe("useUserData", () => {
     });
 
     it("does not mutate logged-out state on late resolve OR late reject when user logs out mid-write", async () => {
-      firestoreServiceMock.getUserData.mockResolvedValueOnce({
-        plan: { programName: "Initial", weeks: [] },
-        profile: { goal: "strength" },
-      });
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce([
-        makeWorkout("w-initial"),
-      ]);
-
       const saveDeferred = createDeferred();
       const addDeferred = createDeferred();
       const updateRejectDeferred = createDeferred();
@@ -602,9 +682,14 @@ describe("useUserData", () => {
         { initialProps: { currentUser: { uid: "user-write" } } }
       );
 
-      await waitFor(() => {
-        expect(result.current.status).toBe("ready");
-      });
+      subs.emitInitial(
+        {
+          plan: { programName: "Initial", weeks: [] },
+          profile: { goal: "strength" },
+        },
+        [makeWorkout("w-initial")]
+      );
+      expect(result.current.status).toBe("ready");
 
       let pendingSave;
       let pendingWorkout;
@@ -666,22 +751,19 @@ describe("useUserData", () => {
     });
 
     it("does not pollute userB state on late resolve OR late reject of userA in-flight writes during direct userA -> userB switch", async () => {
-      firestoreServiceMock.getUserData.mockResolvedValueOnce({
-        plan: { programName: "User A Plan", weeks: [] },
-        profile: { goal: "User A Goal" },
-      });
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce([
-        makeWorkout("w-a0"),
-      ]);
-
       const { result, rerender } = renderHook(
         ({ currentUser }) => useUserData(currentUser),
         { initialProps: { currentUser: { uid: "user-A" } } }
       );
 
-      await waitFor(() => {
-        expect(result.current.status).toBe("ready");
-      });
+      subs.emitInitial(
+        {
+          plan: { programName: "User A Plan", weeks: [] },
+          profile: { goal: "User A Goal" },
+        },
+        [makeWorkout("w-a0")]
+      );
+      expect(result.current.status).toBe("ready");
 
       const aUpdateResolve = createDeferred();
       const aUpdateReject = createDeferred();
@@ -711,18 +793,12 @@ describe("useUserData", () => {
       const userBPlan = { programName: "User B Plan", weeks: [] };
       const userBProfile = { goal: "User B Goal" };
       const userBWorkouts = [makeWorkout("w-b1")];
-      firestoreServiceMock.getUserData.mockResolvedValueOnce({
-        plan: userBPlan,
-        profile: userBProfile,
-      });
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce(userBWorkouts);
 
       rerender({ currentUser: { uid: "user-B" } });
+      subs.emitInitial({ plan: userBPlan, profile: userBProfile }, userBWorkouts);
 
-      await waitFor(() => {
-        expect(result.current.status).toBe("ready");
-        expect(result.current.plan).toEqual(userBPlan);
-      });
+      expect(result.current.status).toBe("ready");
+      expect(result.current.plan).toEqual(userBPlan);
 
       await act(async () => {
         aUpdateResolve.resolve(undefined);
@@ -740,22 +816,19 @@ describe("useUserData", () => {
     });
 
     it("isolates logout + same-UID re-login (userA -> null -> userA) so Session 1 late resolve/reject cannot corrupt Session 2", async () => {
-      firestoreServiceMock.getUserData.mockResolvedValueOnce({
-        plan: { programName: "Session 1 Initial", weeks: [] },
-        profile: { goal: "Session 1 Goal" },
-      });
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce([
-        makeWorkout("w-s1"),
-      ]);
-
       const { result, rerender } = renderHook(
         ({ currentUser }) => useUserData(currentUser),
         { initialProps: { currentUser: { uid: "user-same-epoch" } } }
       );
 
-      await waitFor(() => {
-        expect(result.current.status).toBe("ready");
-      });
+      subs.emitInitial(
+        {
+          plan: { programName: "Session 1 Initial", weeks: [] },
+          profile: { goal: "Session 1 Goal" },
+        },
+        [makeWorkout("w-s1")]
+      );
+      expect(result.current.status).toBe("ready");
 
       const s1UpdateResolve = createDeferred();
       const s1UpdateReject = createDeferred();
@@ -805,18 +878,12 @@ describe("useUserData", () => {
       const s2Plan = { programName: "Session 2 Cloud Plan", weeks: [] };
       const s2Profile = { goal: "Session 2 Cloud Goal" };
       const s2Workouts = [makeWorkout("w-s2")];
-      firestoreServiceMock.getUserData.mockResolvedValueOnce({
-        plan: s2Plan,
-        profile: s2Profile,
-      });
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce(s2Workouts);
 
       rerender({ currentUser: { uid: "user-same-epoch" } });
+      subs.emitInitial({ plan: s2Plan, profile: s2Profile }, s2Workouts);
 
-      await waitFor(() => {
-        expect(result.current.status).toBe("ready");
-        expect(result.current.plan).toEqual(s2Plan);
-      });
+      expect(result.current.status).toBe("ready");
+      expect(result.current.plan).toEqual(s2Plan);
 
       // Settle Session 1 writes AFTER Session 2 is active with the same uid
       await act(async () => {
@@ -835,21 +902,18 @@ describe("useUserData", () => {
     });
 
     it("invalidates in-flight optimistic writes when retrySync() is invoked mid-write so late resolve/reject cannot overwrite freshly hydrated state", async () => {
-      firestoreServiceMock.getUserData.mockResolvedValueOnce({
-        plan: { programName: "Initial", weeks: [] },
-        profile: { goal: "initial" },
-      });
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce([
-        makeWorkout("w-0"),
-      ]);
-
       const { result } = renderHook(() =>
         useUserData({ uid: "user-retry-midwrite" })
       );
 
-      await waitFor(() => {
-        expect(result.current.status).toBe("ready");
-      });
+      subs.emitInitial(
+        {
+          plan: { programName: "Initial", weeks: [] },
+          profile: { goal: "initial" },
+        },
+        [makeWorkout("w-0")]
+      );
+      expect(result.current.status).toBe("ready");
 
       const updResolve = createDeferred();
       const updReject = createDeferred();
@@ -894,11 +958,6 @@ describe("useUserData", () => {
       const freshPlan = { programName: "Fresh Cloud Plan", weeks: [] };
       const freshProfile = { goal: "Fresh Goal" };
       const freshWorkouts = [makeWorkout("w-fresh")];
-      const retryUserDeferred = createDeferred();
-      firestoreServiceMock.getUserData.mockReturnValueOnce(
-        retryUserDeferred.promise
-      );
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce(freshWorkouts);
 
       act(() => {
         result.current.retrySync();
@@ -906,18 +965,10 @@ describe("useUserData", () => {
 
       expect(result.current.status).toBe("loading");
 
-      await act(async () => {
-        retryUserDeferred.resolve({
-          plan: freshPlan,
-          profile: freshProfile,
-        });
-        await Promise.resolve();
-      });
+      subs.emitInitial({ plan: freshPlan, profile: freshProfile }, freshWorkouts);
 
-      await waitFor(() => {
-        expect(result.current.status).toBe("ready");
-        expect(result.current.plan).toEqual(freshPlan);
-      });
+      expect(result.current.status).toBe("ready");
+      expect(result.current.plan).toEqual(freshPlan);
 
       await act(async () => {
         updResolve.resolve(undefined);
@@ -935,21 +986,18 @@ describe("useUserData", () => {
     });
 
     it("invalidates in-flight optimistic writes when clearLocalData() is invoked mid-write so late resolve/reject cannot resurrect cleared data", async () => {
-      firestoreServiceMock.getUserData.mockResolvedValueOnce({
-        plan: { programName: "Before Clear", weeks: [] },
-        profile: { goal: "strength" },
-      });
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce([
-        makeWorkout("w-before"),
-      ]);
-
       const { result } = renderHook(() =>
         useUserData({ uid: "user-clear-midwrite" })
       );
 
-      await waitFor(() => {
-        expect(result.current.status).toBe("ready");
-      });
+      subs.emitInitial(
+        {
+          plan: { programName: "Before Clear", weeks: [] },
+          profile: { goal: "strength" },
+        },
+        [makeWorkout("w-before")]
+      );
+      expect(result.current.status).toBe("ready");
 
       const updResolve = createDeferred();
       const updReject = createDeferred();
@@ -1020,20 +1068,15 @@ describe("useUserData", () => {
       const initialPlan = { programName: "Existing", weeks: [] };
       const initialProfile = { goal: "muscle" };
       const initialWorkouts = [makeWorkout("w-existing")];
-      firestoreServiceMock.getUserData.mockResolvedValueOnce({
-        plan: initialPlan,
-        profile: initialProfile,
-      });
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce(initialWorkouts);
 
       const { result } = renderHook(() => useUserData({ uid: "user-loading" }));
-      await waitFor(() => {
-        expect(result.current.status).toBe("ready");
-      });
+      subs.emitInitial(
+        { plan: initialPlan, profile: initialProfile },
+        initialWorkouts
+      );
+      expect(result.current.status).toBe("ready");
 
       // Trigger retrySync to enter status === "loading" while existing data is hydrated
-      const pendingSync = createDeferred();
-      firestoreServiceMock.getUserData.mockReturnValueOnce(pendingSync.promise);
       act(() => {
         result.current.retrySync();
       });
@@ -1084,27 +1127,22 @@ describe("useUserData", () => {
       const initialPlan = { programName: "Existing", weeks: [] };
       const initialProfile = { goal: "muscle" };
       const initialWorkouts = [makeWorkout("w-existing")];
-      firestoreServiceMock.getUserData.mockResolvedValueOnce({
-        plan: initialPlan,
-        profile: initialProfile,
-      });
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce(initialWorkouts);
 
       try {
         const { result } = renderHook(() => useUserData({ uid: "user-failed" }));
-        await waitFor(() => {
-          expect(result.current.status).toBe("ready");
-        });
+        subs.emitInitial(
+          { plan: initialPlan, profile: initialProfile },
+          initialWorkouts
+        );
+        expect(result.current.status).toBe("ready");
 
         const syncFailure = new Error("Offline");
-        firestoreServiceMock.getUserData.mockRejectedValueOnce(syncFailure);
         act(() => {
           result.current.retrySync();
         });
+        subs.emitUserError(syncFailure);
 
-        await waitFor(() => {
-          expect(result.current.status).toBe("error");
-        });
+        expect(result.current.status).toBe("error");
         expect(result.current.error).toBe(syncFailure);
         expect(result.current.syncError).toBe(syncFailure);
 
@@ -1152,17 +1190,10 @@ describe("useUserData", () => {
       const initialWorkout = makeWorkout("w-1");
       const oldPlan = { programName: "Old", weeks: [] };
       const oldProfile = { goal: "old" };
-      firestoreServiceMock.getUserData.mockResolvedValueOnce({
-        plan: oldPlan,
-        profile: oldProfile,
-      });
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce([initialWorkout]);
 
       const { result } = renderHook(() => useUserData({ uid: "user-save" }));
-
-      await waitFor(() => {
-        expect(result.current.status).toBe("ready");
-      });
+      subs.emitInitial({ plan: oldPlan, profile: oldProfile }, [initialWorkout]);
+      expect(result.current.status).toBe("ready");
 
       const writeDeferred = createDeferred();
       firestoreServiceMock.saveUserData.mockReturnValueOnce(
@@ -1228,16 +1259,13 @@ describe("useUserData", () => {
     it("updatePlan applies immediate optimistic update (preserving profile & workouts), resolves to nextPlan, and rolls back cleanly while rethrowing on failure", async () => {
       const initialWorkout = makeWorkout("w-1");
       const initialProfile = { goal: "hypertrophy" };
-      firestoreServiceMock.getUserData.mockResolvedValueOnce({
-        plan: { programName: "V1", weeks: [] },
-        profile: initialProfile,
-      });
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce([initialWorkout]);
 
       const { result } = renderHook(() => useUserData({ uid: "user-upd" }));
-      await waitFor(() => {
-        expect(result.current.status).toBe("ready");
-      });
+      subs.emitInitial(
+        { plan: { programName: "V1", weeks: [] }, profile: initialProfile },
+        [initialWorkout]
+      );
+      expect(result.current.status).toBe("ready");
 
       const updDeferred = createDeferred();
       firestoreServiceMock.saveUserData.mockReturnValueOnce(
@@ -1301,16 +1329,13 @@ describe("useUserData", () => {
       const existingWorkout = makeWorkout("w-existing");
       const existingPlan = { programName: "PPL", weeks: [] };
       const existingProfile = { goal: "strength" };
-      firestoreServiceMock.getUserData.mockResolvedValueOnce({
-        plan: existingPlan,
-        profile: existingProfile,
-      });
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce([existingWorkout]);
 
       const { result } = renderHook(() => useUserData({ uid: "user-add" }));
-      await waitFor(() => {
-        expect(result.current.status).toBe("ready");
-      });
+      subs.emitInitial(
+        { plan: existingPlan, profile: existingProfile },
+        [existingWorkout]
+      );
+      expect(result.current.status).toBe("ready");
 
       const addDeferred = createDeferred();
       firestoreServiceMock.addWorkout.mockReturnValueOnce(addDeferred.promise);
@@ -1415,16 +1440,13 @@ describe("useUserData", () => {
       const existingWorkouts = [makeWorkout("w-1"), makeWorkout("w-2")];
       const existingPlan = { programName: "PPL", weeks: [] };
       const existingProfile = { goal: "strength" };
-      firestoreServiceMock.getUserData.mockResolvedValueOnce({
-        plan: existingPlan,
-        profile: existingProfile,
-      });
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce(existingWorkouts);
 
       const { result } = renderHook(() => useUserData({ uid: "user-reset" }));
-      await waitFor(() => {
-        expect(result.current.status).toBe("ready");
-      });
+      subs.emitInitial(
+        { plan: existingPlan, profile: existingProfile },
+        existingWorkouts
+      );
+      expect(result.current.status).toBe("ready");
 
       // Reject case: optimistically cleared while pending, restored on reject
       const failDeferred = createDeferred();
@@ -1496,10 +1518,6 @@ describe("useUserData", () => {
         expect(firestoreServiceMock.deleteUserData).not.toHaveBeenCalled();
 
         // Works while status === "loading"
-        const loadingDeferred = createDeferred();
-        firestoreServiceMock.getUserData.mockReturnValueOnce(
-          loadingDeferred.promise
-        );
         firestoreServiceMock.deleteUserData.mockResolvedValueOnce({
           deletedWorkoutsCount: 2,
         });
@@ -1519,17 +1537,13 @@ describe("useUserData", () => {
         expect(loadingDelResult).toEqual({ deletedWorkoutsCount: 2 });
 
         // Works while status === "error"
-        firestoreServiceMock.getUserData.mockRejectedValueOnce(
-          new Error("Sync broke")
-        );
         firestoreServiceMock.deleteUserData.mockResolvedValueOnce({
           deletedWorkoutsCount: 1,
         });
 
         const errHook = renderHook(() => useUserData({ uid: "user-del-err" }));
-        await waitFor(() => {
-          expect(errHook.result.current.status).toBe("error");
-        });
+        subs.emitUserError(new Error("Sync broke"));
+        expect(errHook.result.current.status).toBe("error");
 
         let errDelResult;
         await act(async () => {
@@ -1544,20 +1558,15 @@ describe("useUserData", () => {
         const initialPlan = { programName: "PPL", weeks: [] };
         const initialProfile = { goal: "muscle" };
         const initialWorkout = makeWorkout("w-1");
-        firestoreServiceMock.getUserData.mockResolvedValueOnce({
-          plan: initialPlan,
-          profile: initialProfile,
-        });
-        firestoreServiceMock.getWorkouts.mockResolvedValueOnce([
-          initialWorkout,
-        ]);
 
         const readyHook = renderHook(() =>
           useUserData({ uid: "user-del-ready" })
         );
-        await waitFor(() => {
-          expect(readyHook.result.current.status).toBe("ready");
-        });
+        subs.emitInitial(
+          { plan: initialPlan, profile: initialProfile },
+          [initialWorkout]
+        );
+        expect(readyHook.result.current.status).toBe("ready");
 
         // Rejection leaves state completely untouched
         firestoreServiceMock.deleteUserData.mockRejectedValueOnce(
@@ -1661,19 +1670,16 @@ describe("useUserData", () => {
       }
     });
 
-    it("clearLocalData resets profile, plan, and workouts locally with zero Firestore calls", async () => {
-      firestoreServiceMock.getUserData.mockResolvedValueOnce({
-        plan: { programName: "PPL", weeks: [] },
-        profile: { goal: "muscle" },
-      });
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce([
-        makeWorkout("w-1"),
-      ]);
-
+    it("clearLocalData resets profile, plan, and workouts locally with zero Firestore calls", () => {
       const { result } = renderHook(() => useUserData({ uid: "user-clear" }));
-      await waitFor(() => {
-        expect(result.current.status).toBe("ready");
-      });
+      subs.emitInitial(
+        {
+          plan: { programName: "PPL", weeks: [] },
+          profile: { goal: "muscle" },
+        },
+        [makeWorkout("w-1")]
+      );
+      expect(result.current.status).toBe("ready");
 
       vi.clearAllMocks();
 
@@ -1702,16 +1708,9 @@ describe("useUserData", () => {
       uid,
       { plan = P0, profile = PR0, workouts = [makeWorkout("w-0")] } = {}
     ) {
-      firestoreServiceMock.getUserData.mockResolvedValueOnce({
-        plan,
-        profile,
-      });
-      firestoreServiceMock.getWorkouts.mockResolvedValueOnce(workouts);
-
       const hook = renderHook(() => useUserData({ uid }));
-      await waitFor(() => {
-        expect(hook.result.current.status).toBe("ready");
-      });
+      subs.emitInitial({ plan, profile }, workouts);
+      expect(hook.result.current.status).toBe("ready");
       return hook;
     }
 
@@ -2299,6 +2298,854 @@ describe("useUserData", () => {
       expect(result.current.plan).toBeNull();
       expect(result.current.profile).toBeNull();
       expect(result.current.workouts).toEqual([existing, docA]);
+    });
+  });
+
+  describe("real-time multi-device sync, reconciliation, errors, and listener lifecycle", () => {
+    const P0 = { programName: "P0", weeks: [] };
+    const P1 = { programName: "P1", weeks: [{ weekNumber: 1 }] };
+    const P_REMOTE = { programName: "Remote Plan", weeks: [{ weekNumber: 2 }] };
+    const PR0 = { goal: "Initial Goal" };
+    const PR1 = { goal: "Updated Goal" };
+    const PR_REMOTE = { goal: "Remote Goal" };
+
+    it("applies live multi-device users/{uid} snapshots immediately (updates, remote reset, doc deletion) while preserving workouts and never re-invoking onSyncComplete", () => {
+      const existingWorkouts = [makeWorkout("w-1")];
+      const onSyncComplete = vi.fn();
+      const { result } = renderHook(() =>
+        useUserData({ uid: "user-live-doc" }, { onSyncComplete })
+      );
+
+      subs.emitInitial({ plan: P0, profile: PR0 }, existingWorkouts);
+
+      expect(result.current.status).toBe("ready");
+      expect(result.current.plan).toEqual(P0);
+      expect(result.current.profile).toEqual(PR0);
+      expect(result.current.workouts).toEqual(existingWorkouts);
+      expect(onSyncComplete).toHaveBeenCalledTimes(1);
+      expect(onSyncComplete).toHaveBeenCalledWith(true);
+
+      // Remote plan/profile update from another device
+      subs.emitUser({ plan: P1, profile: PR1 });
+      expect(result.current.plan).toEqual(P1);
+      expect(result.current.profile).toEqual(PR1);
+      expect(result.current.workouts).toEqual(existingWorkouts);
+      expect(onSyncComplete).toHaveBeenCalledTimes(1);
+
+      // Remote resetProgram from another device
+      subs.emitUser({ plan: null, profile: null });
+      expect(result.current.plan).toBeNull();
+      expect(result.current.profile).toBeNull();
+      expect(result.current.workouts).toEqual(existingWorkouts);
+      expect(onSyncComplete).toHaveBeenCalledTimes(1);
+
+      // Remote doc deletion (null)
+      subs.emitUser(null);
+      expect(result.current.plan).toBeNull();
+      expect(result.current.profile).toBeNull();
+      expect(result.current.workouts).toEqual(existingWorkouts);
+      expect(onSyncComplete).toHaveBeenCalledTimes(1);
+    });
+
+    it("applies live multi-device workouts snapshots immediately (additions, edits, deletions) while preserving plan/profile and never re-invoking onSyncComplete", () => {
+      const w0 = makeWorkout("w-0");
+      const w1 = makeWorkout("w-1", {
+        dayNumber: 2,
+        dayName: "Wednesday",
+        focus: "Pull",
+        completedAt: "2026-11-22T10:00:00.000Z",
+      });
+      const onSyncComplete = vi.fn();
+      const { result } = renderHook(() =>
+        useUserData({ uid: "user-live-workouts" }, { onSyncComplete })
+      );
+
+      subs.emitInitial({ plan: P0, profile: PR0 }, [w0]);
+      expect(onSyncComplete).toHaveBeenCalledTimes(1);
+
+      // Remote addition
+      subs.emitWorkouts([w0, w1]);
+      expect(result.current.workouts).toEqual([w0, w1]);
+      expect(result.current.plan).toEqual(P0);
+      expect(result.current.profile).toEqual(PR0);
+      expect(onSyncComplete).toHaveBeenCalledTimes(1);
+
+      // Remote edit
+      const w1Edited = { ...w1, duration: 2400 };
+      subs.emitWorkouts([w0, w1Edited]);
+      expect(result.current.workouts).toEqual([w0, w1Edited]);
+      expect(result.current.plan).toEqual(P0);
+      expect(result.current.profile).toEqual(PR0);
+      expect(onSyncComplete).toHaveBeenCalledTimes(1);
+
+      // Remote deletion
+      subs.emitWorkouts([]);
+      expect(result.current.workouts).toEqual([]);
+      expect(result.current.plan).toEqual(P0);
+      expect(result.current.profile).toEqual(PR0);
+      expect(onSyncComplete).toHaveBeenCalledTimes(1);
+    });
+
+    it("runs migrateLegacyHistory at most once even if subsequent users/{uid} snapshots arrive during or after migration with legacy history", async () => {
+      const legacyHistory = [
+        {
+          workout: { weekNumber: 1, dayName: "Monday", focus: "Push" },
+          logs: [],
+          duration: 1200,
+        },
+      ];
+      const migratedWorkout = makeWorkout("migrated-w1-monday-idx0");
+      const migrateDeferred = createDeferred();
+      firestoreServiceMock.migrateLegacyHistory.mockReturnValueOnce(
+        migrateDeferred.promise
+      );
+
+      const { result } = renderHook(() =>
+        useUserData({ uid: "user-mig-once" })
+      );
+
+      // Initial snapshot triggers migration
+      subs.emitUser({ plan: P0, profile: PR0, history: legacyHistory });
+      expect(firestoreServiceMock.migrateLegacyHistory).toHaveBeenCalledTimes(1);
+      expect(firestoreServiceMock.subscribeWorkouts).not.toHaveBeenCalled();
+
+      // Second snapshot arrives while migration is still in flight
+      subs.emitUser({ plan: P1, profile: PR0, history: legacyHistory });
+      expect(firestoreServiceMock.migrateLegacyHistory).toHaveBeenCalledTimes(1);
+      expect(firestoreServiceMock.subscribeWorkouts).not.toHaveBeenCalled();
+
+      await act(async () => {
+        migrateDeferred.resolve({ migratedCount: 1 });
+        await migrateDeferred.promise;
+      });
+
+      await waitFor(() => {
+        expect(firestoreServiceMock.subscribeWorkouts).toHaveBeenCalledTimes(1);
+      });
+
+      subs.emitWorkouts([migratedWorkout]);
+      expect(result.current.status).toBe("ready");
+      expect(result.current.plan).toEqual(P1);
+      expect(result.current.workouts).toEqual([migratedWorkout]);
+
+      // Subsequent live snapshot after ready still carrying legacy history must NOT re-migrate or re-subscribe
+      subs.emitUser({ plan: P_REMOTE, profile: PR1, history: legacyHistory });
+      expect(firestoreServiceMock.migrateLegacyHistory).toHaveBeenCalledTimes(1);
+      expect(firestoreServiceMock.subscribeWorkouts).toHaveBeenCalledTimes(1);
+      expect(result.current.plan).toEqual(P_REMOTE);
+      expect(result.current.profile).toEqual(PR1);
+    });
+
+    it("runs pre-login bootstrap saveUserData at most once even if echoed snapshots arrive during or after bootstrap", async () => {
+      const bootstrapDeferred = createDeferred();
+      firestoreServiceMock.saveUserData.mockReturnValueOnce(
+        bootstrapDeferred.promise
+      );
+
+      const onSyncComplete = vi.fn();
+      const { result, rerender } = renderHook(
+        ({ currentUser }) => useUserData(currentUser, { onSyncComplete }),
+        { initialProps: { currentUser: null } }
+      );
+
+      await act(async () => {
+        await result.current.savePlan(P0, PR0);
+      });
+
+      rerender({ currentUser: { uid: "user-boot-once" } });
+      subs.emitInitial(null, []);
+
+      expect(firestoreServiceMock.saveUserData).toHaveBeenCalledTimes(1);
+      expect(result.current.status).toBe("loading");
+      expect(onSyncComplete).not.toHaveBeenCalled();
+
+      // Echoed snapshots during in-flight bootstrap must NOT re-trigger bootstrap or complete early
+      subs.emitUser({ plan: P0, profile: PR0 });
+      subs.emitWorkouts([]);
+      expect(firestoreServiceMock.saveUserData).toHaveBeenCalledTimes(1);
+      expect(result.current.status).toBe("loading");
+      expect(onSyncComplete).not.toHaveBeenCalled();
+
+      await act(async () => {
+        bootstrapDeferred.resolve(undefined);
+        await bootstrapDeferred.promise;
+      });
+
+      await waitFor(() => {
+        expect(result.current.status).toBe("ready");
+      });
+      expect(result.current.plan).toEqual(P0);
+      expect(result.current.profile).toEqual(PR0);
+      expect(onSyncComplete).toHaveBeenCalledTimes(1);
+      expect(onSyncComplete).toHaveBeenCalledWith(true);
+
+      // Subsequent empty snapshots after ready must NOT re-trigger bootstrap or onSyncComplete
+      subs.emitUser(null);
+      subs.emitWorkouts([]);
+      expect(firestoreServiceMock.saveUserData).toHaveBeenCalledTimes(1);
+      expect(onSyncComplete).toHaveBeenCalledTimes(1);
+    });
+
+    it("surfaces error on pre-login bootstrap saveUserData failure, preserves local data, and retries bootstrap cleanly via retrySync()", async () => {
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      const bootErr = new Error("Bootstrap write failed");
+      firestoreServiceMock.saveUserData
+        .mockRejectedValueOnce(bootErr)
+        .mockResolvedValueOnce(undefined);
+
+      const onSyncComplete = vi.fn();
+
+      try {
+        const { result, rerender } = renderHook(
+          ({ currentUser }) => useUserData(currentUser, { onSyncComplete }),
+          { initialProps: { currentUser: null } }
+        );
+
+        await act(async () => {
+          await result.current.savePlan(P0, PR0);
+        });
+
+        rerender({ currentUser: { uid: "user-boot-retry" } });
+        subs.emitInitial(null, []);
+
+        const firstUserSub = subs.latestUserSub();
+        const firstWorkoutsSub = subs.latestWorkoutsSub();
+
+        await waitFor(() => {
+          expect(result.current.status).toBe("error");
+        });
+
+        expect(result.current.error).toBe(bootErr);
+        expect(result.current.syncError).toBe(bootErr);
+        expect(result.current.isSynced).toBe(false);
+        expect(firstUserSub.unsub).toHaveBeenCalledTimes(1);
+        expect(firstWorkoutsSub.unsub).toHaveBeenCalledTimes(1);
+        expect(onSyncComplete).toHaveBeenCalledTimes(1);
+        expect(onSyncComplete).toHaveBeenCalledWith(false);
+
+        act(() => {
+          result.current.retrySync();
+        });
+        expect(result.current.status).toBe("loading");
+
+        subs.emitInitial(null, []);
+
+        await waitFor(() => {
+          expect(result.current.status).toBe("ready");
+        });
+
+        expect(result.current.isSynced).toBe(true);
+        expect(result.current.plan).toEqual(P0);
+        expect(result.current.profile).toEqual(PR0);
+        expect(firestoreServiceMock.saveUserData).toHaveBeenCalledTimes(2);
+        expect(firestoreServiceMock.saveUserData).toHaveBeenNthCalledWith(
+          2,
+          "user-boot-retry",
+          { plan: P0, profile: PR0 }
+        );
+        expect(onSyncComplete).toHaveBeenCalledTimes(2);
+        expect(onSyncComplete).toHaveBeenLastCalledWith(true);
+      } finally {
+        consoleErrorSpy.mockRestore();
+      }
+    });
+
+    it("reconciles live users/{uid} snapshots with in-flight docSliceRef optimistic writes (reject rolls back to latest live baseline, resolve keeps local edit)", async () => {
+      const { result } = renderHook(() =>
+        useUserData({ uid: "user-doc-reconcile" })
+      );
+      subs.emitInitial({ plan: P0, profile: PR0 }, [makeWorkout("w-0")]);
+
+      // Subcase A: reject rolls back to latest committed live snapshot baseline P_REMOTE (NOT stale P0)
+      const rejectDeferred = createDeferred();
+      firestoreServiceMock.saveUserData.mockReturnValueOnce(
+        rejectDeferred.promise
+      );
+
+      let pendingReject;
+      act(() => {
+        pendingReject = result.current.updatePlan(P1);
+      });
+      const caughtReject = pendingReject.catch((err) => err);
+
+      expect(result.current.plan).toEqual(P1);
+      expect(result.current.profile).toEqual(PR0);
+
+      // Live snapshot arrives while local updatePlan(P1) is in flight
+      subs.emitUser({ plan: P_REMOTE, profile: PR_REMOTE });
+
+      // Untouched field (profile) updates immediately; touched pending field (plan) keeps optimistic P1
+      expect(result.current.profile).toEqual(PR_REMOTE);
+      expect(result.current.plan).toEqual(P1);
+
+      await act(async () => {
+        rejectDeferred.reject(new Error("Plan update failed"));
+        await caughtReject;
+      });
+
+      expect((await caughtReject).message).toBe("Plan update failed");
+      expect(result.current.plan).toEqual(P_REMOTE);
+      expect(result.current.profile).toEqual(PR_REMOTE);
+
+      // Subcase B: resolve keeps local edit P1 while preserving live profile update PR1
+      const resolveDeferred = createDeferred();
+      firestoreServiceMock.saveUserData.mockReturnValueOnce(
+        resolveDeferred.promise
+      );
+
+      let pendingResolve;
+      act(() => {
+        pendingResolve = result.current.updatePlan(P1);
+      });
+      expect(result.current.plan).toEqual(P1);
+
+      subs.emitUser({ plan: P0, profile: PR1 });
+      expect(result.current.profile).toEqual(PR1);
+      expect(result.current.plan).toEqual(P1);
+
+      await act(async () => {
+        resolveDeferred.resolve(undefined);
+        await pendingResolve;
+      });
+
+      expect(result.current.plan).toEqual(P1);
+      expect(result.current.profile).toEqual(PR1);
+    });
+
+    it("reconciles remote workout snapshot arriving while local addWorkout is pending without dropping or duplicating either entry", async () => {
+      const w0 = makeWorkout("w-0");
+      const wRemote = makeWorkout("w-remote", {
+        dayNumber: 2,
+        dayName: "Tuesday",
+        focus: "Pull",
+        completedAt: "2026-11-23T10:00:00.000Z",
+      });
+      const payloadA = {
+        weekNumber: 1,
+        dayNumber: 3,
+        dayName: "Wednesday",
+        focus: "Legs",
+        logs: [],
+        duration: 1400,
+        completedAt: "2026-11-24T10:00:00.000Z",
+      };
+      const docA = { id: "doc-A", ...payloadA };
+
+      const { result } = renderHook(() =>
+        useUserData({ uid: "user-w-remote" })
+      );
+      subs.emitInitial({ plan: P0, profile: PR0 }, [w0]);
+
+      const addDeferred = createDeferred();
+      firestoreServiceMock.addWorkout.mockReturnValueOnce(addDeferred.promise);
+
+      let pendingAdd;
+      act(() => {
+        pendingAdd = result.current.addWorkout(payloadA);
+      });
+      expect(result.current.workouts).toHaveLength(2);
+      const tempId = result.current.workouts[1].id;
+      expect(tempId).toMatch(/^__optimistic_workout_\d+$/);
+
+      // Remote workout arrives from Device B before local addWorkout resolves
+      subs.emitWorkouts([w0, wRemote]);
+
+      expect(result.current.workouts.map((w) => w.id)).toEqual([
+        "w-0",
+        "w-remote",
+        tempId,
+      ]);
+
+      await act(async () => {
+        addDeferred.resolve(docA);
+        await pendingAdd;
+      });
+
+      expect(result.current.workouts).toEqual([w0, wRemote, docA]);
+
+      // Subsequent snapshot containing docA produces zero duplicates
+      subs.emitWorkouts([w0, wRemote, docA]);
+      expect(result.current.workouts).toEqual([w0, wRemote, docA]);
+    });
+
+    it("deduplicates when subscribeWorkouts echoes the added workout BEFORE addWorkout resolves", async () => {
+      const w0 = makeWorkout("w-0");
+      const payloadA = {
+        weekNumber: 1,
+        dayNumber: 1,
+        dayName: "Monday",
+        focus: "Push",
+        logs: [{ name: "Bench", sets: [{ weight: 135, reps: 8 }] }],
+        duration: 1800,
+        completedAt: "2026-11-24T10:00:00.000Z",
+      };
+      const docA = { id: "doc-A", ...payloadA };
+
+      const { result } = renderHook(() =>
+        useUserData({ uid: "user-w-echo-before" })
+      );
+      subs.emitInitial({ plan: P0, profile: PR0 }, [w0]);
+
+      const addDeferred = createDeferred();
+      firestoreServiceMock.addWorkout.mockReturnValueOnce(addDeferred.promise);
+
+      let pendingAdd;
+      act(() => {
+        pendingAdd = result.current.addWorkout(payloadA);
+      });
+      expect(result.current.workouts).toHaveLength(2);
+      expect(result.current.workouts[1].id).toMatch(/^__optimistic_workout_\d+$/);
+
+      // Firestore latency-compensation echo arrives BEFORE addWorkout resolves
+      subs.emitWorkouts([w0, docA]);
+
+      // Strictly ONE doc-A (no optimistic duplicate while pending!)
+      expect(result.current.workouts).toEqual([w0, docA]);
+
+      // Resolving addWorkout keeps strictly ONE doc-A
+      await act(async () => {
+        addDeferred.resolve(docA);
+        await pendingAdd;
+      });
+
+      expect(result.current.workouts).toEqual([w0, docA]);
+
+      // Even if completedAt differed between optimistic fallback and server doc, resolving removes tempId cleanly
+      const addDeferred2 = createDeferred();
+      firestoreServiceMock.addWorkout.mockReturnValueOnce(addDeferred2.promise);
+      const payloadNoDate = {
+        weekNumber: 1,
+        dayNumber: 2,
+        dayName: "Tuesday",
+        focus: "Pull",
+        logs: [],
+        duration: 1200,
+      };
+      const docB = {
+        id: "doc-B",
+        ...payloadNoDate,
+        completedAt: "2026-11-25T12:34:56.000Z",
+      };
+
+      let pendingAdd2;
+      act(() => {
+        pendingAdd2 = result.current.addWorkout(payloadNoDate);
+      });
+
+      subs.emitWorkouts([w0, docA, docB]);
+
+      await act(async () => {
+        addDeferred2.resolve(docB);
+        await pendingAdd2;
+      });
+
+      expect(result.current.workouts).toEqual([w0, docA, docB]);
+    });
+
+    it("deduplicates when subscribeWorkouts echoes the added workout AFTER addWorkout resolves", async () => {
+      const w0 = makeWorkout("w-0");
+      const payloadA = {
+        weekNumber: 1,
+        dayNumber: 1,
+        dayName: "Monday",
+        focus: "Push",
+        logs: [],
+        duration: 1500,
+        completedAt: "2026-11-24T10:00:00.000Z",
+      };
+      const docA = { id: "doc-A", ...payloadA };
+
+      const { result } = renderHook(() =>
+        useUserData({ uid: "user-w-echo-after" })
+      );
+      subs.emitInitial({ plan: P0, profile: PR0 }, [w0]);
+
+      const addDeferred = createDeferred();
+      firestoreServiceMock.addWorkout.mockReturnValueOnce(addDeferred.promise);
+
+      let pendingAdd;
+      act(() => {
+        pendingAdd = result.current.addWorkout(payloadA);
+      });
+
+      await act(async () => {
+        addDeferred.resolve(docA);
+        await pendingAdd;
+      });
+
+      expect(result.current.workouts).toEqual([w0, docA]);
+
+      // Subsequent snapshot echoing docA produces strictly ONE doc-A
+      subs.emitWorkouts([w0, docA]);
+      expect(result.current.workouts).toEqual([w0, docA]);
+    });
+
+    it("handles initial and mid-session listener errors on either subscription, tears down sibling listener, blocks writes, and recovers cleanly via retrySync()", async () => {
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+
+      try {
+        // 1) Initial error on subscribeUserData
+        const onSync1 = vi.fn();
+        const hook1 = renderHook(() =>
+          useUserData({ uid: "u-err-user" }, { onSyncComplete: onSync1 })
+        );
+        const subUser1 = subs.latestUserSub();
+        const userErr = new Error("User listener failed");
+
+        subUser1.emitError(userErr);
+
+        expect(hook1.result.current.status).toBe("error");
+        expect(hook1.result.current.error).toBe(userErr);
+        expect(hook1.result.current.syncError).toBe(userErr);
+        expect(hook1.result.current.isSynced).toBe(false);
+        expect(subUser1.unsub).toHaveBeenCalledTimes(1);
+        expect(firestoreServiceMock.subscribeWorkouts).not.toHaveBeenCalled();
+        expect(onSync1).toHaveBeenCalledTimes(1);
+        expect(onSync1).toHaveBeenCalledWith(false);
+        hook1.unmount();
+
+        // 2) Initial error on subscribeWorkouts tears down BOTH listeners
+        const onSync2 = vi.fn();
+        const hook2 = renderHook(() =>
+          useUserData({ uid: "u-err-workouts" }, { onSyncComplete: onSync2 })
+        );
+        const subUser2 = subs.latestUserSub();
+        subUser2.emit({ plan: P0, profile: PR0 });
+        const subWorkouts2 = subs.latestWorkoutsSub();
+        const workoutsErr = new Error("Workouts listener failed");
+
+        subWorkouts2.emitError(workoutsErr);
+
+        expect(hook2.result.current.status).toBe("error");
+        expect(hook2.result.current.error).toBe(workoutsErr);
+        expect(hook2.result.current.syncError).toBe(workoutsErr);
+        expect(hook2.result.current.isSynced).toBe(false);
+        expect(subUser2.unsub).toHaveBeenCalledTimes(1);
+        expect(subWorkouts2.unsub).toHaveBeenCalledTimes(1);
+        expect(onSync2).toHaveBeenCalledTimes(1);
+        expect(onSync2).toHaveBeenCalledWith(false);
+        hook2.unmount();
+
+        // 3) Mid-session error on subscribeWorkouts after ready: tears down sibling, preserves data, blocks writes, no repeat onSyncComplete, retrySync recovers
+        const w0 = makeWorkout("w-0");
+        const w1 = makeWorkout("w-1");
+        const onSync3 = vi.fn();
+        const hook3 = renderHook(() =>
+          useUserData({ uid: "u-mid-workouts-err" }, { onSyncComplete: onSync3 })
+        );
+        subs.emitInitial({ plan: P0, profile: PR0 }, [w0]);
+        expect(hook3.result.current.status).toBe("ready");
+        expect(onSync3).toHaveBeenCalledTimes(1);
+        expect(onSync3).toHaveBeenCalledWith(true);
+
+        const subUser3 = subs.latestUserSub();
+        const subWorkouts3 = subs.latestWorkoutsSub();
+        const midErr = new Error("Mid-session workouts disconnect");
+
+        subWorkouts3.emitError(midErr);
+
+        expect(hook3.result.current.status).toBe("error");
+        expect(hook3.result.current.error).toBe(midErr);
+        expect(hook3.result.current.syncError).toBe(midErr);
+        expect(hook3.result.current.isSynced).toBe(false);
+        expect(subUser3.unsub).toHaveBeenCalledTimes(1);
+        expect(subWorkouts3.unsub).toHaveBeenCalledTimes(1);
+        expect(hook3.result.current.plan).toEqual(P0);
+        expect(hook3.result.current.profile).toEqual(PR0);
+        expect(hook3.result.current.workouts).toEqual([w0]);
+        expect(onSync3).toHaveBeenCalledTimes(1);
+
+        // Trailing sibling snapshot is ignored
+        subUser3.emit({ plan: P1, profile: PR1 });
+        expect(hook3.result.current.plan).toEqual(P0);
+        expect(hook3.result.current.profile).toEqual(PR0);
+
+        // Writes are blocked with sync-failed error
+        await expect(hook3.result.current.updatePlan(P1)).rejects.toThrow(
+          SYNC_FAILED_DEFAULT
+        );
+        expect(firestoreServiceMock.saveUserData).not.toHaveBeenCalled();
+
+        // retrySync transitions immediately error -> loading -> ready
+        act(() => {
+          hook3.result.current.retrySync();
+        });
+        expect(hook3.result.current.status).toBe("loading");
+        expect(hook3.result.current.error).toBeNull();
+        expect(hook3.result.current.syncError).toBeNull();
+        expect(hook3.result.current.isSynced).toBe(false);
+
+        subs.emitInitial({ plan: P1, profile: PR1 }, [w0, w1]);
+        expect(hook3.result.current.status).toBe("ready");
+        expect(hook3.result.current.isSynced).toBe(true);
+        expect(hook3.result.current.plan).toEqual(P1);
+        expect(hook3.result.current.profile).toEqual(PR1);
+        expect(hook3.result.current.workouts).toEqual([w0, w1]);
+        expect(onSync3).toHaveBeenCalledTimes(2);
+        expect(onSync3).toHaveBeenLastCalledWith(true);
+        hook3.unmount();
+
+        // 4) Mid-session error on subscribeUserData tears down subscribeWorkouts and does not re-invoke onSyncComplete
+        const onSync4 = vi.fn();
+        const hook4 = renderHook(() =>
+          useUserData({ uid: "u-mid-user-err" }, { onSyncComplete: onSync4 })
+        );
+        subs.emitInitial({ plan: P0, profile: PR0 }, [w0]);
+        expect(onSync4).toHaveBeenCalledTimes(1);
+
+        const subUser4 = subs.latestUserSub();
+        const subWorkouts4 = subs.latestWorkoutsSub();
+        const midUserErr = new Error("Mid-session user doc error");
+
+        subUser4.emitError(midUserErr);
+
+        expect(hook4.result.current.status).toBe("error");
+        expect(hook4.result.current.error).toBe(midUserErr);
+        expect(hook4.result.current.syncError).toBe(midUserErr);
+        expect(subUser4.unsub).toHaveBeenCalledTimes(1);
+        expect(subWorkouts4.unsub).toHaveBeenCalledTimes(1);
+        expect(onSync4).toHaveBeenCalledTimes(1);
+
+        // Trailing workouts snapshot is ignored
+        subWorkouts4.emit([w0, w1]);
+        expect(hook4.result.current.workouts).toEqual([w0]);
+        hook4.unmount();
+      } finally {
+        consoleErrorSpy.mockRestore();
+      }
+    });
+
+    it("tears down both unsubUser and unsubWorkouts exactly once on unmount, logout, account switch, retrySync, deleteAll resolve (not failure), and clearLocalData", async () => {
+      const w0 = makeWorkout("w-0");
+
+      // 1) Hook unmount
+      const hUnmount = renderHook(() => useUserData({ uid: "u-unmount" }));
+      subs.emitInitial({ plan: P0, profile: PR0 }, [w0]);
+      const u1 = subs.latestUserSub();
+      const w1 = subs.latestWorkoutsSub();
+      hUnmount.unmount();
+      expect(u1.unsub).toHaveBeenCalledTimes(1);
+      expect(w1.unsub).toHaveBeenCalledTimes(1);
+
+      // 2) Logout (user -> null)
+      const hLogout = renderHook(
+        ({ currentUser }) => useUserData(currentUser),
+        { initialProps: { currentUser: { uid: "u-logout" } } }
+      );
+      subs.emitInitial({ plan: P0, profile: PR0 }, [w0]);
+      const u2 = subs.latestUserSub();
+      const w2 = subs.latestWorkoutsSub();
+      hLogout.rerender({ currentUser: null });
+      expect(u2.unsub).toHaveBeenCalledTimes(1);
+      expect(w2.unsub).toHaveBeenCalledTimes(1);
+      u2.emit({ plan: P1, profile: PR1 });
+      w2.emit([w0]);
+      expect(hLogout.result.current.plan).toBeNull();
+      expect(hLogout.result.current.workouts).toEqual([]);
+      hLogout.unmount();
+
+      // 3) Account switch (userA -> userB)
+      const hSwitch = renderHook(
+        ({ currentUser }) => useUserData(currentUser),
+        { initialProps: { currentUser: { uid: "u-switch-A" } } }
+      );
+      subs.emitInitial({ plan: P0, profile: PR0 }, [w0]);
+      const uA = subs.latestUserSub();
+      const wA = subs.latestWorkoutsSub();
+      hSwitch.rerender({ currentUser: { uid: "u-switch-B" } });
+      expect(uA.unsub).toHaveBeenCalledTimes(1);
+      expect(wA.unsub).toHaveBeenCalledTimes(1);
+      subs.emitInitial({ plan: P1, profile: PR1 }, []);
+      uA.emit({ plan: P0, profile: PR0 });
+      wA.emit([w0]);
+      expect(hSwitch.result.current.plan).toEqual(P1);
+      expect(hSwitch.result.current.workouts).toEqual([]);
+      hSwitch.unmount();
+
+      // 4) retrySync()
+      const hRetry = renderHook(() => useUserData({ uid: "u-retry-td" }));
+      subs.emitInitial({ plan: P0, profile: PR0 }, [w0]);
+      const uRetryOld = subs.latestUserSub();
+      const wRetryOld = subs.latestWorkoutsSub();
+      act(() => {
+        hRetry.result.current.retrySync();
+      });
+      expect(uRetryOld.unsub).toHaveBeenCalledTimes(1);
+      expect(wRetryOld.unsub).toHaveBeenCalledTimes(1);
+      hRetry.unmount();
+
+      // 5) deleteAll(): failure keeps listeners alive & state intact; resolve unsubscribes both and prevents snapshot resurrection
+      const hDel = renderHook(() => useUserData({ uid: "u-del-td" }));
+      subs.emitInitial({ plan: P0, profile: PR0 }, [w0]);
+      const uDel = subs.latestUserSub();
+      const wDel = subs.latestWorkoutsSub();
+
+      // Failed deleteAll keeps listeners alive and state untouched
+      firestoreServiceMock.deleteUserData.mockRejectedValueOnce(
+        new Error("Delete rejected")
+      );
+      await expect(hDel.result.current.deleteAll()).rejects.toThrow(
+        "Delete rejected"
+      );
+      expect(uDel.unsub).not.toHaveBeenCalled();
+      expect(wDel.unsub).not.toHaveBeenCalled();
+      expect(hDel.result.current.plan).toEqual(P0);
+      expect(hDel.result.current.workouts).toEqual([w0]);
+
+      // Listeners still work after failed deleteAll
+      uDel.emit({ plan: P1, profile: PR1 });
+      expect(hDel.result.current.plan).toEqual(P1);
+
+      // Pending deleteAll suppresses intermediate partial deletion snapshots, then tears down listeners on resolve
+      const delDeferred = createDeferred();
+      firestoreServiceMock.deleteUserData.mockReturnValueOnce(
+        delDeferred.promise
+      );
+      let pendingDel;
+      act(() => {
+        pendingDel = hDel.result.current.deleteAll();
+      });
+      // Partial snapshot during pending deleteAll does not flicker state
+      wDel.emit([]);
+      expect(hDel.result.current.workouts).toEqual([w0]);
+
+      await act(async () => {
+        delDeferred.resolve({ deletedWorkoutsCount: 1 });
+        await pendingDel;
+      });
+      expect(uDel.unsub).toHaveBeenCalledTimes(1);
+      expect(wDel.unsub).toHaveBeenCalledTimes(1);
+      expect(hDel.result.current.plan).toBeNull();
+      expect(hDel.result.current.profile).toBeNull();
+      expect(hDel.result.current.workouts).toEqual([]);
+
+      // Late snapshots after deleteAll resolve CANNOT resurrect deleted state
+      uDel.emit({ plan: P0, profile: PR0 });
+      wDel.emit([w0]);
+      expect(hDel.result.current.plan).toBeNull();
+      expect(hDel.result.current.profile).toBeNull();
+      expect(hDel.result.current.workouts).toEqual([]);
+      hDel.unmount();
+      // Idempotent teardown: still called exactly once even after unmount
+      expect(uDel.unsub).toHaveBeenCalledTimes(1);
+      expect(wDel.unsub).toHaveBeenCalledTimes(1);
+
+      // 6) clearLocalData() tears down both listeners and ignores late snapshots
+      const hClear = renderHook(() => useUserData({ uid: "u-clear-td" }));
+      subs.emitInitial({ plan: P0, profile: PR0 }, [w0]);
+      const uClear = subs.latestUserSub();
+      const wClear = subs.latestWorkoutsSub();
+
+      act(() => {
+        hClear.result.current.clearLocalData();
+      });
+      expect(uClear.unsub).toHaveBeenCalledTimes(1);
+      expect(wClear.unsub).toHaveBeenCalledTimes(1);
+      expect(hClear.result.current.plan).toBeNull();
+      expect(hClear.result.current.profile).toBeNull();
+      expect(hClear.result.current.workouts).toEqual([]);
+
+      uClear.emit({ plan: P1, profile: PR1 });
+      wClear.emit([w0]);
+      expect(hClear.result.current.plan).toBeNull();
+      expect(hClear.result.current.profile).toBeNull();
+      expect(hClear.result.current.workouts).toEqual([]);
+      hClear.unmount();
+      expect(uClear.unsub).toHaveBeenCalledTimes(1);
+      expect(wClear.unsub).toHaveBeenCalledTimes(1);
+    });
+
+    it("immediately unsubscribes on synchronous listener error during registration and does not resubscribe on same-UID user or onSyncComplete identity changes", () => {
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+
+      try {
+        // 1) Synchronous onError inside subscribeUserData immediately invokes returned unsubscribe
+        const syncUserUnsub = vi.fn();
+        const syncUserErr = new Error("Sync user listener error");
+        firestoreServiceMock.subscribeUserData.mockImplementationOnce(
+          (_uid, _onData, onError) => {
+            onError(syncUserErr);
+            return syncUserUnsub;
+          }
+        );
+
+        const hSyncErr1 = renderHook(() =>
+          useUserData({ uid: "u-sync-err-1" })
+        );
+        expect(syncUserUnsub).toHaveBeenCalledTimes(1);
+        expect(hSyncErr1.result.current.status).toBe("error");
+        expect(hSyncErr1.result.current.error).toBe(syncUserErr);
+        expect(firestoreServiceMock.subscribeWorkouts).not.toHaveBeenCalled();
+        hSyncErr1.unmount();
+
+        // 2) Synchronous onError inside subscribeWorkouts immediately invokes BOTH unsubscribes
+        const syncWorkoutsUnsub = vi.fn();
+        const syncWorkoutsErr = new Error("Sync workouts listener error");
+        firestoreServiceMock.subscribeWorkouts.mockImplementationOnce(
+          (_uid, _onData, onError) => {
+            onError(syncWorkoutsErr);
+            return syncWorkoutsUnsub;
+          }
+        );
+
+        const hSyncErr2 = renderHook(() =>
+          useUserData({ uid: "u-sync-err-2" })
+        );
+        const uSync2 = subs.latestUserSub();
+        uSync2.emit({ plan: P0, profile: PR0 });
+
+        expect(uSync2.unsub).toHaveBeenCalledTimes(1);
+        expect(syncWorkoutsUnsub).toHaveBeenCalledTimes(1);
+        expect(hSyncErr2.result.current.status).toBe("error");
+        expect(hSyncErr2.result.current.error).toBe(syncWorkoutsErr);
+        hSyncErr2.unmount();
+
+        // 3) Same-UID new user object reference and new onSyncComplete reference do not resubscribe
+        const userCallCountBefore =
+          firestoreServiceMock.subscribeUserData.mock.calls.length;
+        const workoutsCallCountBefore =
+          firestoreServiceMock.subscribeWorkouts.mock.calls.length;
+
+        const cb1 = vi.fn();
+        const cb2 = vi.fn();
+        const hStable = renderHook(
+          ({ currentUser, onSyncComplete }) =>
+            useUserData(currentUser, { onSyncComplete }),
+          {
+            initialProps: {
+              currentUser: { uid: "u-stable", email: "a@b.com" },
+              onSyncComplete: cb1,
+            },
+          }
+        );
+
+        subs.emitInitial({ plan: P0, profile: PR0 }, [makeWorkout("w-0")]);
+        const uStable = subs.latestUserSub();
+        const wStable = subs.latestWorkoutsSub();
+
+        hStable.rerender({
+          currentUser: { uid: "u-stable", email: "a@b.com" },
+          onSyncComplete: cb2,
+        });
+
+        expect(
+          firestoreServiceMock.subscribeUserData.mock.calls.length
+        ).toBe(userCallCountBefore + 1);
+        expect(
+          firestoreServiceMock.subscribeWorkouts.mock.calls.length
+        ).toBe(workoutsCallCountBefore + 1);
+        expect(uStable.unsub).not.toHaveBeenCalled();
+        expect(wStable.unsub).not.toHaveBeenCalled();
+        hStable.unmount();
+      } finally {
+        consoleErrorSpy.mockRestore();
+      }
     });
   });
 });
