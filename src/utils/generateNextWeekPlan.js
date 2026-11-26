@@ -1,106 +1,51 @@
-import callModel from "../services/api/callModel";
+import { requestNextWeekPlan } from "../services/api/callModel";
 import getUserToken from "./getUserToken";
-
-const DEFAULT_DURATION_MINUTES = 60;
-
-const resolveDurationMinutes = (rawDuration) => {
-  if (
-    typeof rawDuration === "number" ||
-    (typeof rawDuration === "string" && rawDuration.trim() !== "")
-  ) {
-    const parsed = Number(rawDuration);
-    const rounded = Math.round(parsed);
-    if (Number.isFinite(parsed) && rounded > 0) {
-      return rounded;
-    }
-  }
-  return DEFAULT_DURATION_MINUTES;
-};
+import normalizeProfileText from "./normalizeProfileText";
 
 const generateNextWeekPlan = async (profile, plan, history, feedback) => {
+  if (!Array.isArray(plan?.weeks) || plan.weeks.length === 0) {
+    throw new Error("Cannot generate next week without an existing plan");
+  }
+
   const lastWeek = plan.weeks[plan.weeks.length - 1];
-  const nextWeekNumber = lastWeek.weekNumber + 1;
-  const days = profile.selectedDays.join(", ");
-  const targetDurationMinutes = resolveDurationMinutes(profile?.duration);
-  const recentHistory = (history || [])
-    .slice(-10)
-    .map((log) => {
-      const focus = log?.focus ?? log?.workout?.focus ?? "Workout";
-      const exerciseCount = Array.isArray(log?.logs) ? log.logs.length : 0;
-      const durationMinutes = Math.floor((log?.duration || 0) / 60);
-      return `${focus}: ${exerciseCount} exercises completed. Duration: ${durationMinutes} minutes.`;
-    })
-    .join("\n");
 
-  const prompt = `
-    You are an expert fitness coach. The user has just finished Week ${
-      lastWeek.weekNumber
-    } of "${plan.programName}".
-
-    User Profile: ${profile.goal}, ${profile.level}, ${profile.equipment}.
-    Schedule: ${days}
-    User Feedback for Week ${lastWeek.weekNumber}: "${feedback || "None"}"
-
-    Here is the structure of the previous week (Week ${lastWeek.weekNumber}):
-    ${JSON.stringify(
-      lastWeek.schedule.map((d) => ({
-        day: d.dayName,
-        focus: d.focus,
-        exercises: d.exercises.map((e) => e.name),
-      }))
-    )}
-
-    Here is their recent performance summary:
-    ${recentHistory || "No logs recorded yet (assume standard progression)."}
-
-    **TASK**: Generate the full schedule for **WEEK ${nextWeekNumber}**.
-    - **CRITICAL**: Read the User Feedback. If they mention pain/injury (e.g., 'stiff shoulder'), MODIFY the plan to accommodate (e.g., remove overhead press).
-    - If feedback is positive, apply progressive overload.
-    - Write a 'coachNotes' field explaining EXACTLY how you adapted the plan based on their feedback and performance. Write in a slightly robotic or tactical tone.
-    - Ensure workouts are scheduled on: ${days}.
-    - **CRITICAL**: Adjust volume to fit ${targetDurationMinutes} minutes.
-    - Provide an "alternatives" array (3 items) for every exercise.
-
-    **OUTPUT FORMAT:**
-    Returns STRICT, parseable JSON. No markdown, no preambles.
-    Structure:
-    {
-      "programName": "Same as previous week, just with week ${nextWeekNumber} added.",
-      "description": "Strategic summary of the training phase for week ${nextWeekNumber}.",
-      "weeks": [
-        {
-          "weekNumber": ${nextWeekNumber},
-          "description": "Brief summary of this week's specific training focus (e.g. 'Hypertrophy Phase - Volume Increase').",
-          "coachNotes": "Explain how you adapted the plan based on user feedback and performance.",
-          "schedule": [
-            {
-              "dayNumber": 1,
-              "dayName": "Monday",
-              "focus": "Primary Focus (e.g., Push, Pull, Legs, Upper Body)",
-              "exercises": [
-                 {
-                   "name": "Exercise Name",
-                   "sets": 3,
-                   "reps": "8-12",
-                   "rest": "60s",
-                   "notes": "Progression note",
-                   "alternatives": ["Exact Alt 1", "Exact Alt 2", "Exact Alt 3"]
-                 }
-              ]
-            }
-          ]
-        }
-      ]
-    }
-  `;
+  const payload = {
+    profile: {
+      goal: profile?.goal,
+      level: profile?.level,
+      equipment: profile?.equipment,
+      selectedDays: profile?.selectedDays,
+      ...(profile?.duration !== undefined
+        ? { duration: profile.duration }
+        : {}),
+      exclusions: normalizeProfileText(profile?.exclusions),
+      priorities: normalizeProfileText(profile?.priorities),
+    },
+    programName: typeof plan?.programName === "string" ? plan.programName : "",
+    lastWeek: {
+      weekNumber: lastWeek?.weekNumber,
+      schedule: Array.isArray(lastWeek?.schedule)
+        ? lastWeek.schedule.map((day) => ({
+            ...(day?.dayNumber !== undefined
+              ? { dayNumber: day.dayNumber }
+              : {}),
+            dayName: day?.dayName,
+            focus: day?.focus,
+            exercises: Array.isArray(day?.exercises)
+              ? day.exercises.map((ex) => ({ name: ex?.name }))
+              : [],
+          }))
+        : [],
+    },
+    recentWorkouts: Array.isArray(history) ? history.slice(-10) : [],
+    feedback: typeof feedback === "string" ? feedback : "",
+  };
 
   const token = await getUserToken();
-  const result = await callModel(prompt, token);
+  const result = await requestNextWeekPlan(payload, token);
 
-  if (result && result.weeks && result.weeks.length > 0) {
+  if (result && Array.isArray(result.weeks) && result.weeks.length > 0) {
     return result;
-  } else if (result && result.weekNumber) {
-    return { weeks: [result] };
   }
 
   throw new Error("Failed to generate valid plan data");

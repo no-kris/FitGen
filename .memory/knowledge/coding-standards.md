@@ -1,6 +1,6 @@
 ---
 status: active
-updated: 2026-11-24
+updated: 2026-11-26
 source: observed
 ---
 
@@ -51,10 +51,11 @@ function that consumes plan data.
 - Field names are canonical: `duration`, `selectedDays`, `weeks`, `exclusions`,
   `priorities`, `weeks[].schedule[].exercises`. No aliases or synonyms - a
   `sessionDuration` alias was how the week-2 generator previously lost its input.
-- The model's JSON schema lives once in `src/utils/planSchema.js` and is used by both
-  prompt builders. Prompts MUST NOT redeclare the shape inline.
-- Model output is untrusted input: run `validatePlan()` before it reaches state.
-  `extractJsonFromText` guarantees parseable JSON, not correct JSON.
+- The model's JSON schema snippet lives once in `api/_prompts.js` (`buildPlanSchemaSnippet`)
+  and is shared by both server prompt builders. Prompts MUST NOT redeclare the shape inline.
+- Model output is untrusted input: run `api/_validatePlan.js` (`validatePlan()`) on the
+  server before returning a plan. `api/_extractJsonFromText.js` (`extractJsonFromText`)
+  guarantees parseable JSON, not correct JSON.
 - Every exercise SHOULD carry a stable `id`; do not use array index as identity.
 
 ## Naming
@@ -129,10 +130,13 @@ function that consumes plan data.
 - Every variable in use MUST be declared in `.env`, which is untracked and holds the
   only local record of values. Adding or removing a variable is part of the same
   change; document names in prose, never by pasting values.
-- All model traffic goes through `src/services/api/callModel.js`; keep the 3-attempt
-  retry and JSON extraction there.
+- All model traffic goes through `src/services/api/callModel.js` (calling dedicated
+  endpoints such as `/api/generatePlan` and `/api/generateWeek` with the 3-attempt
+  retry policy for retryable failures); JSON extraction (`api/_extractJsonFromText.js`)
+  and plan validation (`api/_validatePlan.js`) happen on the server.
 - Endpoints stay wrapped in `withAuth()` and return `createJsonResponse()`.
-- Prompts live in `src/utils/*Plan.js`, never in components.
+- Prompts live server-side in `api/_prompts.js`, never in `src/` (client utilities in
+  `src/utils/*Plan.js` send structured payloads only).
 
 ## Accessibility
 
