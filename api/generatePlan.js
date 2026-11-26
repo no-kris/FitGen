@@ -1,5 +1,10 @@
 import { withAuth, createJsonResponse } from "./_utils.js";
 import { validateGeneratePlanBody } from "./_requestValidation.js";
+import {
+  checkRateLimit,
+  buildRateLimitHeaders,
+  createRateLimitErrorResponse,
+} from "./_rateLimit.js";
 import { buildInitialPlanPrompt } from "./_prompts.js";
 import { callAIProvider, AIProviderError } from "./_aiClient.js";
 import { extractJsonFromText } from "./_extractJsonFromText.js";
@@ -9,7 +14,7 @@ export const config = {
   runtime: "edge",
 };
 
-export default withAuth(async (body) => {
+export default withAuth(async (body, auth) => {
   const reqCheck = validateGeneratePlanBody(body);
   if (!reqCheck.ok) {
     return createJsonResponse(
@@ -22,6 +27,12 @@ export default withAuth(async (body) => {
     );
   }
 
+  const rateLimit = await checkRateLimit(auth?.uid, "generatePlan");
+  if (!rateLimit.allowed) {
+    return createRateLimitErrorResponse(rateLimit);
+  }
+  const rateLimitHeaders = buildRateLimitHeaders(rateLimit);
+
   const prompt = buildInitialPlanPrompt(reqCheck.data);
 
   let aiText;
@@ -31,7 +42,8 @@ export default withAuth(async (body) => {
     if (err instanceof AIProviderError) {
       return createJsonResponse(
         { error: err.message, code: err.code },
-        err.status
+        err.status,
+        rateLimitHeaders
       );
     }
     throw err;
@@ -44,7 +56,8 @@ export default withAuth(async (body) => {
         error: "AI response could not be parsed as valid JSON",
         code: "INVALID_AI_OUTPUT",
       },
-      422
+      422,
+      rateLimitHeaders
     );
   }
 
@@ -62,9 +75,10 @@ export default withAuth(async (body) => {
         code: "PLAN_VALIDATION_FAILED",
         details: planCheck.errors,
       },
-      422
+      422,
+      rateLimitHeaders
     );
   }
 
-  return createJsonResponse({ plan: planCheck.plan }, 200);
+  return createJsonResponse({ plan: planCheck.plan }, 200, rateLimitHeaders);
 });

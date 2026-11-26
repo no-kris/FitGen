@@ -126,14 +126,18 @@ function that consumes plan data.
 
 - Client code reads only `import.meta.env.VITE_*`.
 - `api/*` reads `process.env.*` (`PROVIDER_API_KEY`, `API_URL`, `MODEL`,
-  `MODEL_FALLBACK_1`, `MODEL_FALLBACK_2`). Server-only keys MUST NOT reach `src/`.
+  `MODEL_FALLBACK_1`, `MODEL_FALLBACK_2`, `UPSTASH_REDIS_REST_URL`,
+  `UPSTASH_REDIS_REST_TOKEN`, and optional `RATE_LIMIT_*` overrides). Server-only keys
+  MUST NOT reach `src/`.
 - Every variable in use MUST be declared in `.env`, which is untracked and holds the
   only local record of values. Adding or removing a variable is part of the same
   change; document names in prose, never by pasting values.
 - All model traffic goes through `src/services/api/callModel.js` (calling dedicated
   endpoints such as `/api/generatePlan` and `/api/generateWeek` with the 3-attempt
-  retry policy for retryable failures); JSON extraction (`api/_extractJsonFromText.js`)
-  and plan validation (`api/_validatePlan.js`) happen on the server.
+  retry policy for retryable `5xx`/`422`/network/timeout failures — never retrying
+  `4xx` or `503 RATE_LIMIT_UNAVAILABLE`); JSON extraction (`api/_extractJsonFromText.js`),
+  plan validation (`api/_validatePlan.js`), and strict fail-closed per-user Upstash
+  rate limiting (`api/_rateLimit.js`) happen on the server.
 - Endpoints stay wrapped in `withAuth()` and return `createJsonResponse()`.
 - Prompts live server-side in `api/_prompts.js`, never in `src/` (client utilities in
   `src/utils/*Plan.js` send structured payloads only).

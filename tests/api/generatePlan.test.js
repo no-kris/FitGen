@@ -25,8 +25,23 @@ const makeJwt = (payload) =>
   `${toBase64Url(JSON.stringify({ alg: "RS256", typ: "JWT" }))}.${toBase64Url(JSON.stringify(payload))}.sig_test`;
 
 const VALID_TOKEN = makeJwt({ sub: "uid-123", email: "user@example.com", firebase: { sign_in_provider: "password" } });
+const VALID_TOKEN_USER_2 = makeJwt({ sub: "uid-999", email: "other@example.com", firebase: { sign_in_provider: "password" } });
 const ANON_TOKEN = makeJwt({ sub: "anon-1", firebase: { sign_in_provider: "anonymous" } });
-const ENV_KEYS = ["VITE_FIREBASE_API_KEY", "PROVIDER_API_KEY", "API_URL", "MODEL", "MODEL_FALLBACK_1", "MODEL_FALLBACK_2"];
+const UPSTASH_URL = "https://upstash.test";
+const UPSTASH_TOKEN = "upstash-secret-token-plan";
+const ENV_KEYS = [
+  "VITE_FIREBASE_API_KEY",
+  "PROVIDER_API_KEY",
+  "API_URL",
+  "MODEL",
+  "MODEL_FALLBACK_1",
+  "MODEL_FALLBACK_2",
+  "UPSTASH_REDIS_REST_URL",
+  "UPSTASH_REDIS_REST_TOKEN",
+  "RATE_LIMIT_GENERATE_PLAN_MAX",
+  "RATE_LIMIT_GENERATE_PLAN_WINDOW_SEC",
+  "RATE_LIMIT_TIMEOUT_MS",
+];
 
 const validPayload = (overrides = {}) => ({
   goal: "build muscle", level: "intermediate", selectedDays: ["Monday", "Wednesday", "Friday"],
@@ -63,10 +78,23 @@ function makeRequest({ method = "POST", token = VALID_TOKEN, body, rawBody, head
 const jsonResponse = (data, status = 200) =>
   new Response(typeof data === "string" ? data : JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } });
 
-const authOkResponse = () =>
-  jsonResponse({ users: [{ localId: "uid-123", email: "user@example.com", providerUserInfo: [{ providerId: "password" }] }] });
+const authOkResponse = (uid = "uid-123", email = "user@example.com") =>
+  jsonResponse({ users: [{ localId: uid, email, providerUserInfo: [{ providerId: "password" }] }] });
+
+const rateLimitAllowResponse = (count = 1, ttlMs = 3_600_000) =>
+  jsonResponse({ result: [1, count, ttlMs] });
+
+const rateLimitDenyResponse = (count = 10, ttlMs = 1_842_150) =>
+  jsonResponse({ result: [0, count, ttlMs] });
 
 const aiChoiceResponse = (content, status = 200) => jsonResponse({ choices: [{ message: { content } }] }, status);
+
+function expectRateLimitHeaders(res, limit = "10", remaining = "9") {
+  expect(res.headers.get("X-RateLimit-Limit")).toBe(limit);
+  expect(res.headers.get("X-RateLimit-Remaining")).toBe(remaining);
+  expect(res.headers.get("X-RateLimit-Reset")).toMatch(/^\d+$/);
+  expect(res.headers.get("Access-Control-Expose-Headers")).toContain("X-RateLimit-Limit");
+}
 
 function assertNoUndefined(value, path = "plan") {
   expect(value, `${path} must not be undefined`).not.toBeUndefined();
@@ -87,8 +115,13 @@ describe("POST /api/generatePlan", () => {
     process.env.PROVIDER_API_KEY = "secret-provider-key-xyz";
     process.env.API_URL = "https://provider.test/v1/chat/completions";
     process.env.MODEL = "primary-model";
+    process.env.UPSTASH_REDIS_REST_URL = UPSTASH_URL;
+    process.env.UPSTASH_REDIS_REST_TOKEN = UPSTASH_TOKEN;
     delete process.env.MODEL_FALLBACK_1;
     delete process.env.MODEL_FALLBACK_2;
+    delete process.env.RATE_LIMIT_GENERATE_PLAN_MAX;
+    delete process.env.RATE_LIMIT_GENERATE_PLAN_WINDOW_SEC;
+    delete process.env.RATE_LIMIT_TIMEOUT_MS;
 
     fetchMock = vi.fn();
     globalThis.fetch = fetchMock;
@@ -130,6 +163,7 @@ describe("POST /api/generatePlan", () => {
     const badJsonRes = await handler(makeRequest({ rawBody: "{bad json" }));
     expect(badJsonRes.status).toBe(400);
     await expect(badJsonRes.json()).resolves.toEqual({ error: "Invalid JSON body" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -154,10 +188,11 @@ describe("POST /api/generatePlan", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("returns 200 with sanitized plan from fenced JSON and zero undefined values", async () => {
+  it("returns 200 with sanitized plan from fenced JSON, rate-limit headers, and zero undefined values", async () => {
     const { default: handler } = getEndpoint();
     fetchMock
       .mockResolvedValueOnce(authOkResponse())
+      .mockResolvedValueOnce(rateLimitAllowResponse(1, 3_600_000))
       .mockResolvedValueOnce(aiChoiceResponse(`Here is your plan:\n\`\`\`json\n${JSON.stringify(makePlanJson())}\n\`\`\``));
 
     const res = await handler(
@@ -165,6 +200,7 @@ describe("POST /api/generatePlan", () => {
     );
     expect(res.status).toBe(200);
     expect(res.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expectRateLimitHeaders(res, "10", "9");
 
     const { plan } = await res.json();
     expect(plan.programName).toBe("Hypertrophy Foundation");
@@ -178,7 +214,11 @@ describe("POST /api/generatePlan", () => {
     });
     assertNoUndefined(plan);
 
-    const [aiUrl, aiInit] = fetchMock.mock.calls[1];
+    const [rlUrl, rlInit] = fetchMock.mock.calls[1];
+    expect(rlUrl).toBe(UPSTASH_URL);
+    expect(JSON.parse(rlInit.body).slice(3, 5)).toEqual(["fitgen:rl:v1:generatePlan:uid-123", "10"]);
+
+    const [aiUrl, aiInit] = fetchMock.mock.calls[2];
     expect(aiUrl).toBe("https://provider.test/v1/chat/completions");
     expect(aiInit.headers.Authorization).toBe("Bearer secret-provider-key-xyz");
     expect(JSON.parse(aiInit.body).model).toBe("primary-model");
@@ -192,24 +232,28 @@ describe("POST /api/generatePlan", () => {
     const { default: handler } = getEndpoint();
     fetchMock
       .mockResolvedValueOnce(authOkResponse())
+      .mockResolvedValueOnce(rateLimitAllowResponse())
       .mockResolvedValueOnce(jsonResponse({ error: "overloaded" }, 503))
       .mockResolvedValueOnce(aiChoiceResponse(JSON.stringify(makePlanJson())));
 
     const res = await handler(makeRequest({ body: validPayload() }));
     expect(res.status).toBe(200);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(JSON.parse(fetchMock.mock.calls[1][1].body).model).toBe("primary-model");
-    expect(JSON.parse(fetchMock.mock.calls[2][1].body).model).toBe("fallback-model-1");
+    expectRateLimitHeaders(res);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body).model).toBe("primary-model");
+    expect(JSON.parse(fetchMock.mock.calls[3][1].body).model).toBe("fallback-model-1");
   });
 
-  it("returns 422 on unparseable AI output or plan validation failure", async () => {
+  it("returns 422 with rate-limit headers on unparseable AI output or plan validation failure", async () => {
     const { default: handler } = getEndpoint();
 
     fetchMock
       .mockResolvedValueOnce(authOkResponse())
+      .mockResolvedValueOnce(rateLimitAllowResponse(2))
       .mockResolvedValueOnce(aiChoiceResponse("Sorry, I cannot provide JSON right now."));
     const unparseable = await handler(makeRequest({ body: validPayload() }));
     expect(unparseable.status).toBe(422);
+    expectRateLimitHeaders(unparseable, "10", "8");
     await expect(unparseable.json()).resolves.toEqual({
       error: "AI response could not be parsed as valid JSON",
       code: "INVALID_AI_OUTPUT",
@@ -227,34 +271,39 @@ describe("POST /api/generatePlan", () => {
     });
     fetchMock
       .mockResolvedValueOnce(authOkResponse())
+      .mockResolvedValueOnce(rateLimitAllowResponse(3))
       .mockResolvedValueOnce(aiChoiceResponse(JSON.stringify(badPlan)));
     const invalidPlan = await handler(makeRequest({ body: validPayload() }));
     expect(invalidPlan.status).toBe(422);
+    expectRateLimitHeaders(invalidPlan, "10", "7");
     const body = await invalidPlan.json();
     expect(body.code).toBe("PLAN_VALIDATION_FAILED");
     expect(Array.isArray(body.details) && body.details.length >= 2).toBe(true);
   });
 
-  it("maps missing env to 500, upstream/envelope errors to 502, and timeouts to 504 without fallback burn or secret leaks", async () => {
+  it("maps missing env to 500, upstream/envelope errors to 502, and timeouts to 504 with rate-limit headers", async () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { default: handler } = getEndpoint();
 
     // 500 missing config
     delete process.env.PROVIDER_API_KEY;
-    fetchMock.mockResolvedValueOnce(authOkResponse());
+    fetchMock.mockResolvedValueOnce(authOkResponse()).mockResolvedValueOnce(rateLimitAllowResponse());
     const cfgRes = await handler(makeRequest({ body: validPayload() }));
     expect(cfgRes.status).toBe(500);
+    expectRateLimitHeaders(cfgRes);
     expect((await cfgRes.json()).code).toBe("CONFIG_ERROR");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
 
     // 502 upstream HTTP error
     process.env.PROVIDER_API_KEY = "secret-provider-key-xyz";
     fetchMock
       .mockResolvedValueOnce(authOkResponse())
+      .mockResolvedValueOnce(rateLimitAllowResponse())
       .mockResolvedValueOnce(jsonResponse({ rawUpstream: "secret-provider-key-xyz stacktrace" }, 500));
     const upRes = await handler(makeRequest({ body: validPayload() }));
     expect(upRes.status).toBe(502);
+    expectRateLimitHeaders(upRes);
     const upText = await upRes.text();
     expect(JSON.parse(upText).code).toBe("UPSTREAM_ERROR");
     expect(upText).not.toContain("secret-provider-key-xyz");
@@ -263,22 +312,96 @@ describe("POST /api/generatePlan", () => {
     // 502 invalid provider envelope
     fetchMock
       .mockResolvedValueOnce(authOkResponse())
+      .mockResolvedValueOnce(rateLimitAllowResponse())
       .mockResolvedValueOnce(jsonResponse({ choices: [] }, 200));
     const envRes = await handler(makeRequest({ body: validPayload() }));
     expect(envRes.status).toBe(502);
+    expectRateLimitHeaders(envRes);
     expect((await envRes.json()).code).toBe("UPSTREAM_INVALID_RESPONSE");
 
     // 504 timeout does not burn fallback models
     process.env.MODEL_FALLBACK_1 = "fallback-should-not-run";
     const abortErr = Object.assign(new Error("The operation was aborted"), { name: "AbortError" });
     fetchMock.mockReset();
-    fetchMock.mockResolvedValueOnce(authOkResponse()).mockRejectedValueOnce(abortErr);
+    fetchMock
+      .mockResolvedValueOnce(authOkResponse())
+      .mockResolvedValueOnce(rateLimitAllowResponse())
+      .mockRejectedValueOnce(abortErr);
     const timeoutRes = await handler(makeRequest({ body: validPayload() }));
     expect(timeoutRes.status).toBe(504);
+    expectRateLimitHeaders(timeoutRes);
     expect((await timeoutRes.json()).code).toBe("UPSTREAM_TIMEOUT");
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
 
     const logged = [...errSpy.mock.calls, ...warnSpy.mock.calls].flat().map(String).join(" ");
     expect(logged).not.toContain("secret-provider-key-xyz");
+  });
+
+  it("enforces 429 before AI call and isolates per-user Redis keys ignoring body uid (AC-10, AC-11, AC-14)", async () => {
+    const { default: handler } = getEndpoint();
+    fetchMock
+      .mockResolvedValueOnce(authOkResponse("uid-123"))
+      .mockResolvedValueOnce(rateLimitDenyResponse(10, 1_842_150));
+
+    const denied = await handler(makeRequest({ body: validPayload({ uid: "spoofed-uid" }) }));
+    expect(denied.status).toBe(429);
+    expect(denied.headers.get("Retry-After")).toBe("1843");
+    expectRateLimitHeaders(denied, "10", "0");
+    expect(await denied.json()).toMatchObject({
+      code: "RATE_LIMIT_EXCEEDED",
+      retryAfterSeconds: 1843,
+      limit: 10,
+      windowSeconds: 3600,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).slice(3, 5)).toEqual([
+      "fitgen:rl:v1:generatePlan:uid-123",
+      "10",
+    ]);
+
+    fetchMock.mockReset();
+    fetchMock
+      .mockResolvedValueOnce(authOkResponse("uid-999", "other@example.com"))
+      .mockResolvedValueOnce(rateLimitAllowResponse(1))
+      .mockResolvedValueOnce(aiChoiceResponse(JSON.stringify(makePlanJson())));
+
+    const user2Res = await handler(makeRequest({ token: VALID_TOKEN_USER_2, body: validPayload() }));
+    expect(user2Res.status).toBe(200);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).slice(3, 5)).toEqual([
+      "fitgen:rl:v1:generatePlan:uid-999",
+      "10",
+    ]);
+  });
+
+  it("fails closed with 503 RATE_LIMIT_UNAVAILABLE without calling AI or leaking Upstash secrets (AC-12)", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { default: handler } = getEndpoint();
+
+    delete process.env.UPSTASH_REDIS_REST_URL;
+    fetchMock.mockResolvedValueOnce(authOkResponse());
+    const missingCfg = await handler(makeRequest({ body: validPayload() }));
+    expect(missingCfg.status).toBe(503);
+    expect(missingCfg.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    expect(missingCfg.headers.get("X-RateLimit-Limit")).toBeNull();
+    expect((await missingCfg.json()).code).toBe("RATE_LIMIT_UNAVAILABLE");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    process.env.UPSTASH_REDIS_REST_URL = UPSTASH_URL;
+    fetchMock.mockReset();
+    fetchMock
+      .mockResolvedValueOnce(authOkResponse())
+      .mockResolvedValueOnce(jsonResponse({ error: `ERR ${UPSTASH_TOKEN}` }, 500));
+    const upstashFail = await handler(makeRequest({ body: validPayload() }));
+    expect(upstashFail.status).toBe(503);
+    expect(upstashFail.headers.get("Access-Control-Allow-Origin")).toBe("*");
+    const failText = await upstashFail.text();
+    expect(JSON.parse(failText).code).toBe("RATE_LIMIT_UNAVAILABLE");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const logged = errSpy.mock.calls.flat().map(String).join(" ");
+    for (const surface of [failText, logged]) {
+      expect(surface).not.toContain(UPSTASH_TOKEN);
+      expect(surface).not.toContain(UPSTASH_URL);
+    }
   });
 });

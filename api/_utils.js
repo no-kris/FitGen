@@ -3,6 +3,8 @@ export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Expose-Headers":
+    "Retry-After, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset",
 };
 
 const BASE64URL_SEGMENT_PATTERN = /^[A-Za-z0-9_-]+$/;
@@ -32,12 +34,23 @@ const USER_DISABLED_RESULT = {
  * Creates a standard JSON Response object with the appropriate CORS headers.
  * @param {any} body - The data to be sent in the response body (will be stringified).
  * @param {number} status - The HTTP status code (e.g., 200, 400, 500).
+ * @param {Record<string, string>} [extraHeaders={}] - Optional additional response headers.
  * @returns {Response} A standard Web API Response object.
  */
-export function createJsonResponse(body, status) {
+export function createJsonResponse(body, status, extraHeaders = {}) {
+  const safeExtra =
+    extraHeaders &&
+    typeof extraHeaders === "object" &&
+    !Array.isArray(extraHeaders)
+      ? extraHeaders
+      : {};
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: {
+      ...corsHeaders,
+      ...safeExtra,
+      "Content-Type": "application/json",
+    },
   });
 }
 

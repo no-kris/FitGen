@@ -2,10 +2,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as callModelModule from "./callModel";
 
-const jsonResponse = (body, status = 200) =>
+const jsonResponse = (body, status = 200, headers = {}) =>
   new Response(typeof body === "string" ? body : JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...headers },
   });
 
 const VALID_PLAN = {
@@ -247,5 +247,120 @@ describe("src/services/api/callModel", () => {
       ).rejects.toMatchObject({ name: "ApiError", retryable: true });
       expect(fetchMock).toHaveBeenCalledTimes(2);
     }
+  });
+
+  it("parses Retry-After delta-seconds and HTTP-dates and rejects invalid values (AC-15)", () => {
+    expect(callModelModule.parseRetryAfterSeconds).toBeTypeOf("function");
+    const nowMs = Date.parse("Thu, 26 Nov 2026 18:04:15 GMT");
+
+    expect(callModelModule.parseRetryAfterSeconds("120", nowMs)).toBe(120);
+    expect(callModelModule.parseRetryAfterSeconds(" 1 ", nowMs)).toBe(1);
+    expect(callModelModule.parseRetryAfterSeconds("Thu, 26 Nov 2026 18:05:00 GMT", nowMs)).toBe(45);
+    expect(callModelModule.parseRetryAfterSeconds("Thu, 26 Nov 2026 18:04:16 GMT", nowMs + 200)).toBe(1);
+
+    for (const invalid of [
+      "Thu, 26 Nov 2026 18:04:00 GMT",
+      "Thu, 26 Nov 2026 18:04:15 GMT",
+      "0",
+      "-10",
+      "12.5",
+      "not-a-date",
+      "",
+      "   ",
+      null,
+      undefined,
+      120,
+    ]) {
+      expect(callModelModule.parseRetryAfterSeconds(invalid, nowMs)).toBeNull();
+    }
+  });
+
+  it("extracts retryAfterSeconds and formats fallback messages on 429 without retrying (AC-16)", async () => {
+    const sleep = vi.fn(async () => {});
+
+    // JSON body retryAfterSeconds takes precedence over Retry-After header; preserves server message verbatim
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        { error: "Custom limit message", code: "RATE_LIMIT_EXCEEDED", retryAfterSeconds: 90 },
+        429,
+        { "Retry-After": "300" }
+      )
+    );
+    await expect(
+      callModelModule.requestInitialPlan({ goal: "build muscle" }, "tok-1", { sleep, baseUrl: "" })
+    ).rejects.toMatchObject({
+      name: "ApiError",
+      message: "Custom limit message",
+      status: 429,
+      code: "RATE_LIMIT_EXCEEDED",
+      retryable: false,
+      retryAfterSeconds: 90,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+
+    // Bare non-JSON 429 falls back to Retry-After header and synthesizes wait duration
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValueOnce(new Response("rate limited", { status: 429, headers: { "Retry-After": "90" } }));
+    await expect(
+      callModelModule.requestInitialPlan({ goal: "build muscle" }, "tok-1", { sleep, baseUrl: "" })
+    ).rejects.toMatchObject({
+      name: "ApiError",
+      message: "Too many requests. Please wait 2 minutes before trying again.",
+      status: 429,
+      code: "RATE_LIMIT_EXCEEDED",
+      retryable: false,
+      retryAfterSeconds: 90,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+
+    // Bare 429 without Retry-After synthesizes generic message
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValueOnce(new Response("", { status: 429 }));
+    await expect(
+      callModelModule.requestInitialPlan({ goal: "build muscle" }, "tok-1", { sleep, baseUrl: "" })
+    ).rejects.toMatchObject({
+      name: "ApiError",
+      message: "Too many requests. Please try again shortly.",
+      status: 429,
+      code: "RATE_LIMIT_EXCEEDED",
+      retryable: false,
+      retryAfterSeconds: null,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("fast-fails 503 RATE_LIMIT_UNAVAILABLE while keeping other 503 responses retryable (AC-17)", async () => {
+    expect(callModelModule.isRetryableStatus(503)).toBe(true);
+    expect(callModelModule.isRetryableResponse).toBeTypeOf("function");
+    expect(callModelModule.isRetryableResponse(503, "RATE_LIMIT_UNAVAILABLE")).toBe(false);
+    expect(callModelModule.isRetryableResponse(503, "UPSTREAM_ERROR")).toBe(true);
+    expect(callModelModule.isRetryableResponse(422, "INVALID_AI_OUTPUT")).toBe(true);
+    expect(callModelModule.isRetryableResponse(429, "RATE_LIMIT_EXCEEDED")).toBe(false);
+
+    const sleep = vi.fn(async () => {});
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        { error: "Rate limiting service is temporarily unavailable. Please try again shortly.", code: "RATE_LIMIT_UNAVAILABLE" },
+        503
+      )
+    );
+
+    await expect(
+      callModelModule.requestNextWeekPlan({ lastWeek: { weekNumber: 1, schedule: [] } }, "tok-1", {
+        sleep,
+        baseUrl: "",
+      })
+    ).rejects.toMatchObject({
+      name: "ApiError",
+      status: 503,
+      code: "RATE_LIMIT_UNAVAILABLE",
+      retryable: false,
+      retryAfterSeconds: null,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
   });
 });

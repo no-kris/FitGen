@@ -39,17 +39,35 @@ describe("api/_utils cleanup & response helpers", () => {
     expect(existsSync(new URL("../../api/debug.js", import.meta.url))).toBe(false);
   });
 
-  it("exports CORS headers and builds JSON responses with them", async () => {
+  it("exports CORS headers (including exposed rate-limit headers) and builds JSON responses", async () => {
     expect(corsHeaders).toEqual({
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Expose-Headers":
+        "Retry-After, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset",
     });
     const res = createJsonResponse({ ok: true, count: 2 }, 201);
     expect(res.status).toBe(201);
     expect(res.headers.get("Content-Type")).toBe("application/json");
     expectCors(res);
     await expect(res.json()).resolves.toEqual({ ok: true, count: 2 });
+
+    const withExtra = createJsonResponse({ ok: true }, 200, {
+      "X-RateLimit-Limit": "10",
+      "X-RateLimit-Remaining": "9",
+      "X-RateLimit-Reset": "1700003600",
+      "Content-Type": "text/plain",
+    });
+    expect(withExtra.headers.get("X-RateLimit-Limit")).toBe("10");
+    expect(withExtra.headers.get("X-RateLimit-Remaining")).toBe("9");
+    expect(withExtra.headers.get("X-RateLimit-Reset")).toBe("1700003600");
+    expect(withExtra.headers.get("Content-Type")).toBe("application/json");
+    expectCors(withExtra);
+
+    const withBadExtra = createJsonResponse({ ok: true }, 200, ["ignored"]);
+    expect(withBadExtra.headers.get("Content-Type")).toBe("application/json");
+    expectCors(withBadExtra);
   });
 });
 

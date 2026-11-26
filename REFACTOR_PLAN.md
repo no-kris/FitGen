@@ -8,10 +8,10 @@ This plan is split into seven phases. Each phase can ship on its own and leaves 
 | 1 | Make workout saves reliable | **Done** (`de9720a`) | Users keep losing workouts |
 | 2 | Remove guest mode | **Code done** (Anonymous sign-in off & Console rules updated; production cleanup script runbook pending) | Guest data keeps piling up in the cloud; the AI endpoint can be abused |
 | 3 | Fix smaller bugs | **Code done** (12 of 12 items landed: 2 in Phase 1, 3 in Group 1, 3 in Group 2, 2 in Group 3, 2 in Group 4; manual smoke checks pending) | Wrong plans, broken timers, unsafe account deletion |
-| 4 | One data layer | **Code done** (Groups 1–3 complete: `eaba70b`, `74b612a`, Group 3 pending commit; live multi-device smoke check pending) | New features bring back the save bugs |
-| 5 | Move AI work to the server | Pending | Prompt abuse, malformed plans |
+| 4 | One data layer | **Code done** (Groups 1–3 complete: `eaba70b`, `74b612a`, `f494c51`; live multi-device smoke check pending) | New features bring back the save bugs |
+| 5 | Move AI work to the server | **Code done** (Groups 1–3 complete: `555f86d`, `929af54`, Group 3 landed; live Upstash + Vercel Edge smoke check pending) | Prompt abuse, malformed plans |
 | 6 | Clean up the app shell | Pending (`Button` `...rest` in Phase 1; `TextInput` `...rest` in Phase 3 Group 2) | Slow re-renders, scattered logic |
-| 7 | Tests and tooling | In progress (Vitest + RTL + 27 suites / 473 tests across Phases 1–4) | Things break again without anyone noticing |
+| 7 | Tests and tooling | In progress (Vitest + RTL + 35 suites / 690 tests across Phases 1–5) | Things break again without anyone noticing |
 
 ---
 
@@ -162,25 +162,33 @@ This plan is split into seven phases. Each phase can ship on its own and leaves 
 
 ---
 
-## Phase 5: Move AI work to the server
+## Phase 5: Move AI work to the server — **Code done** (live Upstash + Vercel Edge smoke check pending)
 
 **Goal:** The client sends structured inputs. The server writes the prompt, calls the model, and checks the result.
 
-- [ ] Replace `api/callModel.js` with:
+- [x] Replace `api/callModel.js` with:
   - `api/generatePlan.js`, which takes the profile form data
   - `api/generateWeek.js`, which takes `{ profile, lastWeek, recentWorkouts, feedback }`
-- [ ] Move the prompt text from `src/utils/generateInitialPlan.js` and `generateNextWeekPlan.js` into `api/_prompts.js`.
-- [ ] Add `api/_validatePlan.js`:
+  *(Done in Phase 5 Group 2, `929af54`: created `api/generatePlan.js`, `api/generateWeek.js`, `api/_requestValidation.js`, and `api/_aiClient.js`; deleted `api/callModel.js`.)*
+- [x] Move the prompt text from `src/utils/generateInitialPlan.js` and `generateNextWeekPlan.js` into `api/_prompts.js`. *(Done in Phase 5 Group 2, `929af54`: centralized prompts and `buildPlanSchemaSnippet` in `api/_prompts.js`; client utilities send structured payloads only.)*
+- [x] Add `api/_validatePlan.js`:
   - Check the shape of the response: `weeks[].schedule[].exercises[]`, with required fields.
   - Clean up values: whole-number `sets`, `restSeconds`, and default `alternatives: []`.
   - Make sure scheduled days ⊆ `selectedDays` and `weekNumber` matches the expected value.
-- [ ] Return 422 when the response fails validation, and let the client retry only on 5xx or 422, never on 401 or 400.
-- [ ] Add a basic per-user rate limit, for example with Vercel KV/Upstash or a Firestore counter.
-- [ ] Delete `api/debug.js`.
-- [ ] Fix `verifyFirebaseToken` so it also rejects anonymous tokens (defense in depth after Phase 2).
-- [ ] Move `extractJsonFromText` to the server and delete the client copy.
+  *(Done in Phase 5 Group 1, `555f86d`: added Edge-safe `api/_validatePlan.js` + 58 unit tests in `tests/api/_validatePlan.test.js`.)*
+- [x] Return 422 when the response fails validation, and let the client retry only on 5xx or 422, never on 401 or 400. *(Done in Phase 5 Group 2, `929af54`: endpoints return `422` on extraction/validation failure; `src/services/api/callModel.js` retries up to 3 attempts strictly on retryable `5xx`/`422`/network/timeout errors, never on `4xx` or `503 RATE_LIMIT_UNAVAILABLE`.)*
+- [x] Add a basic per-user rate limit, for example with Vercel KV/Upstash or a Firestore counter. *(Done in Phase 5 Group 3: added Edge-safe `api/_rateLimit.js` using atomic Upstash Redis REST `EVAL` Lua script with strict fail-closed `503 RATE_LIMIT_UNAVAILABLE`, `429 RATE_LIMIT_EXCEEDED` + `Retry-After`/`X-RateLimit-*` headers, wired into `api/generatePlan.js` and `api/generateWeek.js`, and updated `api/_utils.js` + `src/services/api/callModel.js`.)*
+- [x] Delete `api/debug.js`. *(Done in Phase 5 Group 1, `555f86d`.)*
+- [x] Fix `verifyFirebaseToken` so it also rejects anonymous tokens (defense in depth after Phase 2). *(Done in Phase 5 Group 1, `555f86d`: hardened `api/_utils.js` + 44 tests in `tests/api/_utils.test.js`.)*
+- [x] Move `extractJsonFromText` to the server and delete the client copy. *(Done across Phase 5 Group 1, `555f86d` [`api/_extractJsonFromText.js`] and Group 2, `929af54` [deleted `src/utils/extractJsonFromText.js`].)*
 
-**Done when:** The client bundle contains no prompt text, and malformed AI output never reaches Firestore.
+**Group 1 verification (`555f86d`):** `npm test` (30/30 files, 602/602 tests), `npx eslint src api` (exit 0), `npm run build` (exit 0), 3/3 re-frozen suites `HOLD`. Run artifacts in `docs/orchestrator-runs/phase-5-group-1-api-auth-and-plan-validation-2026-11-25/`.
+
+**Group 2 verification (`929af54`):** `npm test` (34/34 files, 644/644 tests), `npx eslint src api` (exit 0), `npm run build` (exit 0, 1789 modules), 6/6 frozen suites `HOLD`, zero prompt text or server-only env vars in `src/` and `dist/assets/*.js`. Run artifacts in `docs/orchestrator-runs/phase-5-group-2-server-prompting-and-ai-endpoints-2026-11-25/`.
+
+**Group 3 verification:** `npm test` (35/35 files, 690/690 tests), `npx eslint src api` (exit 0), `npm run build` (exit 0, 1789 modules), 5/5 frozen/re-frozen suites `HOLD`, `grep -rnE 'UPSTASH_REDIS_REST_URL|UPSTASH_REDIS_REST_TOKEN' dist/ src/` 0 matches. Run artifacts in `docs/orchestrator-runs/phase-5-group-3-rate-limiting-2026-11-26/`.
+
+**Done when:** The client bundle contains no prompt text, and malformed AI output never reaches Firestore. *(Verified in code/tests/build; pending deployment ops: configure `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` in `.env` and Vercel and run live Edge smoke checks.)*
 
 ---
 
@@ -204,8 +212,8 @@ This plan is split into seven phases. Each phase can ship on its own and leaves 
 
 **Goal:** Keep the fixes from breaking again.
 
-- [x] Add Vitest and React Testing Library. *(Added with 27 test suites / 473 passing tests across Phases 1–4, plus `scripts/**/*.test.js` and `mcp/**/*.test.js` in `vitest.config.js`.)*
-- [ ] Write unit tests for `parseRestSeconds`, `extractJsonFromText`, `validatePlan`, `stripUndefined`, and the active-workout store's key logic. *(`stripUndefined`, `activeWorkoutStore`, and `parseRestSeconds` tests done; `extractJsonFromText` and `validatePlan` remain.)*
+- [x] Add Vitest and React Testing Library. *(Added with 35 test suites / 690 passing tests across Phases 1–5, plus `scripts/**/*.test.js` and `mcp/**/*.test.js` in `vitest.config.js`.)*
+- [x] Write unit tests for `parseRestSeconds`, `extractJsonFromText`, `validatePlan`, `stripUndefined`, and the active-workout store's key logic. *(All 5 covered: `stripUndefined`, `activeWorkoutStore`, `parseRestSeconds` in Phases 1–3; `extractJsonFromText` and `validatePlan` in Phase 5 Group 1, `555f86d`.)*
 - [ ] Add Firestore rules tests with `@firebase/rules-unit-testing` and the emulator: the owner can read and write, other users and anonymous users can't.
 - [ ] Add a GitHub Action that runs lint, tests and build on each PR.
 - [ ] Optionally convert to TypeScript, starting with the data model types (`Plan`, `Week`, `Day`, `Exercise`, `WorkoutLog`).

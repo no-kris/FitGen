@@ -1,7 +1,13 @@
 export class ApiError extends Error {
   constructor(
     message,
-    { status = null, code = null, details = null, retryable = false } = {}
+    {
+      status = null,
+      code = null,
+      details = null,
+      retryable = false,
+      retryAfterSeconds = null,
+    } = {}
   ) {
     super(message);
     this.name = "ApiError";
@@ -9,7 +15,36 @@ export class ApiError extends Error {
     this.code = code;
     this.details = details;
     this.retryable = retryable;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
+}
+
+export function parseRetryAfterSeconds(headerValue, nowMs = Date.now()) {
+  if (typeof headerValue !== "string") {
+    return null;
+  }
+
+  const trimmed = headerValue.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  if (/^\d+$/.test(trimmed)) {
+    const parsed = Number.parseInt(trimmed, 10);
+    return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : null;
+  }
+
+  if (/^[+-]?\d+(?:\.\d+)?$/.test(trimmed)) {
+    return null;
+  }
+
+  const timestampMs = Date.parse(trimmed);
+  if (Number.isFinite(timestampMs)) {
+    const deltaSeconds = Math.ceil((timestampMs - nowMs) / 1000);
+    return deltaSeconds >= 1 ? deltaSeconds : null;
+  }
+
+  return null;
 }
 
 export function isRetryableStatus(status) {
@@ -17,6 +52,23 @@ export function isRetryableStatus(status) {
     typeof status === "number" &&
     (status === 422 || (status >= 500 && status < 600))
   );
+}
+
+export function isRetryableResponse(status, code = null) {
+  if (code === "RATE_LIMIT_UNAVAILABLE") {
+    return false;
+  }
+  return isRetryableStatus(status);
+}
+
+function formatRetryWait(retryAfterSeconds) {
+  if (retryAfterSeconds < 60) {
+    return retryAfterSeconds === 1
+      ? "1 second"
+      : `${retryAfterSeconds} seconds`;
+  }
+  const mins = Math.ceil(retryAfterSeconds / 60);
+  return mins === 1 ? "1 minute" : `${mins} minutes`;
 }
 
 export function resolveEndpointUrl(
@@ -116,11 +168,37 @@ export async function requestAiEndpoint(
             // Non-JSON error body; fall back to default error message.
           }
 
-          throw new ApiError(errData?.error || "Failed to call backend API", {
+          const code =
+            errData?.code ??
+            (response.status === 429 ? "RATE_LIMIT_EXCEEDED" : null);
+          const retryAfterSeconds =
+            typeof errData?.retryAfterSeconds === "number" &&
+            Number.isSafeInteger(errData.retryAfterSeconds) &&
+            errData.retryAfterSeconds >= 1
+              ? errData.retryAfterSeconds
+              : parseRetryAfterSeconds(response.headers?.get?.("Retry-After"));
+
+          let message;
+          if (
+            typeof errData?.error === "string" &&
+            errData.error.trim().length > 0
+          ) {
+            message = errData.error;
+          } else if (response.status === 429) {
+            message =
+              retryAfterSeconds !== null
+                ? `Too many requests. Please wait ${formatRetryWait(retryAfterSeconds)} before trying again.`
+                : "Too many requests. Please try again shortly.";
+          } else {
+            message = "Failed to call backend API";
+          }
+
+          throw new ApiError(message, {
             status: response.status,
-            code: errData?.code ?? null,
+            code,
             details: errData?.details ?? null,
-            retryable: isRetryableStatus(response.status),
+            retryable: isRetryableResponse(response.status, code),
+            retryAfterSeconds,
           });
         }
 
