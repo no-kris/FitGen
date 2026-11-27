@@ -6,9 +6,9 @@ Its artifacts are `docs/orchestrator-runs/<run-id>/red-proof.md` and `docs/orche
 
 Evidence comes from the repo and run directory: `spec.md`, `red-proof.md`, `green-report-round-<N>.md`, `log.md`, `verification.md`, `git status` / `git diff`, independent `git hash-object <path>`, `npm test`, `npx eslint src api`, and the agent's `HANDOFF` block. The agent's own claims about test results or hashes don't count as evidence.
 
-## 1.1 Test Quality & Spec Fidelity
+## 1.1 Test Quality, Conciseness & Spec Fidelity
 
-Measures whether the authored tests genuinely prove `spec.md` (beyond happy paths), follow `.memory/knowledge/testing.md` and `vitest.config.js`, fail cleanly on Stage 3, and stay ESLint-clean for Stage 8 (`verifier`).
+Measures whether the authored tests genuinely prove `spec.md` (beyond happy paths) while staying lean, readable, and refactor-resilient — following `.memory/knowledge/testing.md` and `vitest.config.js`, failing cleanly on Stage 3, and staying ESLint-clean for Stage 8 (`verifier`).
 
 ### Scoring Guide
 
@@ -16,17 +16,17 @@ Measures whether the authored tests genuinely prove `spec.md` (beyond happy path
 
    - Level 1 example: `ActiveWorkout.test.jsx` mocks `useAppContext`, queries buttons by `.btn-primary`, skips the failed-save Retry and double-tap criteria in `spec.md`, and fails `npx eslint src api` because `describe`/`it`/`expect` aren't imported from `"vitest"`.
 
-2. Partially meets – Core acceptance criteria are covered and fail cleanly, but error paths, edge cases, idempotency, or legacy shapes are missing, or `.memory/knowledge/testing.md` / lint rules are partially violated (e.g., `data-testid` queries, mocking Firebase SDK internals instead of service functions, real `sleep`, or minor ESLint errors).
+2. Partially meets – Core acceptance criteria are covered and fail cleanly, but error paths, edge cases, idempotency, or legacy shapes are missing; `.memory/knowledge/testing.md` / lint rules are partially violated (e.g., `data-testid` queries, mocking Firebase SDK internals, real `sleep`, minor ESLint errors); **or** the suite is bloated, repetitive, or coupled to implementation details (e.g., 500+ LOC of copy-pasted setup blocks, speculative permutations outside `spec.md`, or assertions on internal call order / intermediate state).
 
-   - Level 2 example: `firestoreServices.test.js` tests writing to `users/{uid}/workouts/{workoutId}`, but omits testing that running legacy history migration twice is idempotent and mocks `setDoc` directly instead of mocking at the service boundary.
+   - Level 2 example: `useUserData.test.jsx` covers the spec's sync criteria, but balloons to 1,200+ LOC by copy-pasting mock harnesses across dozens of redundant permutations and asserting internal hook call counts instead of observable behavior.
 
-3. Meets – Every testable acceptance criterion in `spec.md` has behavioral assertions covering happy paths plus relevant error states, edge cases, async pending/double-tap guards, idempotency, and legacy/corrupt shapes. Tests follow `.memory/knowledge/testing.md` (colocated files, no `__tests__/`, factory fixtures, `// @vitest-environment jsdom` only on DOM/storage tests, offline mocks at `callModel.js` and Firestore service boundaries, fake timers, cleared `localStorage`, role/label/text queries with the real context provider, no snapshots). Stage 3 failures are clean spec assertions (net-new modules isolated cleanly without production stubs), and `npx eslint src api` exits `0` on all authored test files.
+3. Meets – Every testable acceptance criterion in `spec.md` has concise, behavioral assertions covering happy paths plus relevant error states, edge cases, async pending/double-tap guards, idempotency, and legacy/corrupt shapes — without bloat or speculative out-of-spec tests (soft budget ~300 LOC per file, using `it.each(...)` and small factory helpers to avoid copy-pasted boilerplate). Tests follow `.memory/knowledge/testing.md` (colocated files, no `__tests__/`, no non-`_` `*.test.*` files directly inside `api/`, `// @vitest-environment jsdom` only on DOM/storage tests, offline mocks at `callModel.js` and Firestore service boundaries, fake timers, cleared `localStorage`, role/label/text queries with the real context provider, no snapshots). Stage 3 failures are clean spec assertions (net-new modules isolated cleanly without production stubs), and `npx eslint src api` exits `0` on all authored test files.
 
-   - Level 3 example: Colocated `activeWorkoutStore.test.js` (`// @vitest-environment jsdom`) covers `fitgen:active:v1` round-trip, legacy key fallback, and corrupt JSON returning `null`; `ActiveWorkout.test.jsx` renders inside the real provider, finds Finish and Retry via `getByRole("button", { name: ... })`, and asserts disabled-while-saving plus single-write on double tap; `npx eslint src api` exits `0`.
+   - Level 3 example: Colocated `activeWorkoutStore.test.js` (`// @vitest-environment jsdom`, ~150 LOC) uses `it.each` and a small factory to cover `fitgen:active:v1` round-trip, legacy key fallback, and corrupt JSON returning `null`; `ActiveWorkout.test.jsx` renders inside the real provider, finds Finish and Retry via `getByRole("button", { name: ... })`, and asserts disabled-while-saving plus single-write on double tap; `npx eslint src api` exits `0`.
 
-4. Exceeds – Level 3, plus tests produce crisp, unambiguous failure diagnostics with reusable factory fixtures (`*.fixtures.js`) using canonical field names, allowing `implementer` to resolve every failure cleanly without disputing test intent.
+4. Exceeds – Level 3, plus tests achieve maximum signal-to-noise with crisp, unambiguous failure diagnostics and reusable factory fixtures (`*.fixtures.js`) using canonical field names — easy for a human to scan in under a minute and allowing `implementer` to resolve every failure cleanly without disputing test intent or fighting brittle internal assertions.
 
-   - Level 4 example: Level 3, plus `workout.fixtures.js` exposes factory builders (`makeWorkoutLog`, `makeLegacyUserDoc`) using canonical shapes (`duration`, `selectedDays`, `weeks`), and `implementer` turns all 10 test files green on round 1 with zero spec-vs-test ambiguity.
+   - Level 4 example: Level 3, plus `workout.fixtures.js` exposes compact factory builders (`makeWorkoutLog`, `makeLegacyUserDoc`) using canonical shapes (`duration`, `selectedDays`, `weeks`), every authored test file stays under ~250 LOC, and `implementer` turns all test files green on round 1 with zero spec-vs-test ambiguity.
 
 ## 1.2 Proof Integrity & Scope Discipline
 
@@ -34,7 +34,7 @@ Measures whether the agent respected strict file, command, and immutability boun
 
 ### Scoring Guide
 
-1. Does not meet – Edited any non-test `src/` or `api/` file, `src/css/*`, `.env*`, `dist/*`, `ios/*`, `node_modules/*`, `.memory/*`, `.agents/*`, or another role's run artifact (`spec.md`, `log.md`, `verification.md`, `review.md`); ran forbidden git commands (`commit`, `checkout`, `switch`, `reset`, `push`) or invoked a subagent; wrote a red proof when `npm test` exited `0`; fabricated output or hashes; or edited any test file during Stage 7.
+1. Does not meet – Edited any non-test `src/` or `api/` file, created a non-`_` `*.test.*` file directly in `api/`, edited `src/css/*`, `.env*`, `dist/*`, `ios/*`, `node_modules/*`, `.memory/*`, `.agents/*`, or another role's run artifact (`spec.md`, `log.md`, `verification.md`, `review.md`); ran forbidden git commands (`commit`, `checkout`, `switch`, `reset`, `push`) or invoked a subagent; wrote a red proof when `npm test` exited `0`; fabricated output or hashes; or edited any test file during Stage 7.
 
    - Level 1 example: Created a stub `src/services/storage/activeWorkoutStore.js` to avoid a missing-module failure in Stage 3, or loosened an assertion in `ActiveWorkout.test.jsx` during Stage 7 and reported `HOLD:` instead of `CHANGED:`.
 
@@ -81,4 +81,4 @@ Red-only run: score `red-proof.md` and the Stage 3 `HANDOFF` block; mark `green-
 
 **Pass threshold:** A run passes if it scores 3 or higher on all three dimensions, and the gates are met: Stage 3 produces a non-zero `npm test` exit with exact `git hash-object` matches for every file in `frozen:`, Stage 7 makes zero test edits and reports accurate `HOLD:` / `CHANGED:` / `added:` / `removed:` status, `npx eslint src api` exits `0` on authored test files, and the diff is confined to allowed test and report paths.
 
-**Notes on threshold design:** Test Quality & Spec Fidelity has a floor because a boundary-perfect run with shallow, happy-path-only, or lint-broken tests gives false confidence at Stage 9 and breaks Stage 8 (`verifier`). Proof Integrity & Scope Discipline treats editing production code, fabricating hashes, or altering frozen tests in Stage 7 as a Level 1 breach: the entire TDD contract depends on tests staying independent of implementation and tamper-evident across rounds. Report & Handoff Quality has a floor because `orchestrator` gates on `red-proof.md` and `green-report-round-<N>.md` verbatim, and a vague still-red green report wastes one of the shared 3 build rounds. Exceeds rewards clear AC traceability, clean factory fixtures, and proactive escalation of missing prerequisites.
+**Notes on threshold design:** Test Quality, Conciseness & Spec Fidelity has a floor because both shallow, happy-path-only tests and bloated, implementation-coupled suites hurt the project — shallow tests give false confidence at Stage 9, while bloated tests create refactor drag and unreadability. Proof Integrity & Scope Discipline treats editing production code, fabricating hashes, or altering frozen tests in Stage 7 as a Level 1 breach: the entire TDD contract depends on tests staying independent of implementation and tamper-evident across rounds. Report & Handoff Quality has a floor because `orchestrator` gates on `red-proof.md` and `green-report-round-<N>.md` verbatim, and a vague still-red green report wastes one of the shared 3 build rounds. Exceeds rewards high signal-to-noise suites, clear AC traceability, clean factory fixtures, and proactive escalation of missing prerequisites.
